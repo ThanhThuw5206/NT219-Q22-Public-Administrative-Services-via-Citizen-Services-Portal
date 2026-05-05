@@ -5,7 +5,6 @@ import crypto from "crypto";
 const generateDocumentId = () => {
     return "HS-" + Date.now();
 };
-
 // tạo hash SHA-256
 const generateFileHash = (filePath) => {
     const fileBuffer = fs.readFileSync(filePath);
