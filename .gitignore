@@ -1,0 +1,6 @@
+node_modules/
+backend/src/uploads/
+backend/src/data/
+backend/src/keys/
+backend/src/crypto/keys/
+.env
