@@ -2,28 +2,29 @@ import fs from "fs";
 import crypto from "crypto";
 
 // tạo document_id
-const generateDocumentId = () => {
+export const generateDocumentId = () => {
     return "HS-" + Date.now();
 };
-// tạo hash SHA-256
-const generateFileHash = (filePath) => {
+
+// tạo SHA-256 hash
+export const generateFileHash = (filePath) => {
     const fileBuffer = fs.readFileSync(filePath);
 
-    const hash = crypto
+    return crypto
         .createHash("sha256")
         .update(fileBuffer)
         .digest("hex");
-
-    return hash;
 };
 
+// xử lý document
 export const processDocument = (filePath) => {
+
     const documentId = generateDocumentId();
     const hash = generateFileHash(filePath);
 
     return {
         document_id: documentId,
-        hash: hash,
+        file_hash: hash,
         file_path: filePath
     };
 };

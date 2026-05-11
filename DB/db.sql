@@ -73,7 +73,8 @@ CREATE TABLE documents (
     -- trạng thái hồ sơ
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     signed_at TIMESTAMP NULL,
-    FOREIGN KEY (owner_id) REFERENCES users(id)
+    FOREIGN KEY (owner_id) REFERENCES users(id),
+    FOREIGN KEY (public_key_id) REFERENCES keys(key_id)
 );
 
 -- 6. KEYS
