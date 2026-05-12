@@ -14,6 +14,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadDirectory = path.resolve(__dirname, "../uploads");
 
+// đảm bảo folder tồn tại
+const uploadFolder = "src/uploads/";
+
+if (!fs.existsSync(uploadFolder)) {
+    fs.mkdirSync(uploadFolder, { recursive: true });
+}
+
+// cấu hình storage
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         fs.mkdirSync(uploadDirectory, { recursive: true });
@@ -63,6 +71,7 @@ export const uploadDocument = (req, res) => {
                 reason: error.message
             });
         }
+
     });
 };
 
