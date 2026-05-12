@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import {
     getDocument,
     getDocuments,
+    getSignedDocumentFile,
     processDocument,
     verifyDocument
 } from "../services/document.service.js";
@@ -34,7 +35,7 @@ const pdfOnly = (req, file, cb) => {
 const upload = multer({ storage, fileFilter: pdfOnly });
 
 export const uploadDocument = (req, res) => {
-    upload.single("file")(req, res, function (err) {
+    upload.single("file")(req, res, async function (err) {
         if (err) {
             return res.status(400).json({ message: err.message || "Upload error" });
         }
@@ -43,18 +44,25 @@ export const uploadDocument = (req, res) => {
             return res.status(400).json({ message: "No file uploaded" });
         }
 
-        const result = processDocument({
-            filePath: req.file.path,
-            originalName: req.file.originalname,
-            ownerId: req.body.owner_id || "demo-citizen",
-            ipAddress: req.ip
-        });
+        try {
+            const result = await processDocument({
+                filePath: req.file.path,
+                originalName: req.file.originalname,
+                ownerId: req.body.owner_id || "demo-citizen",
+                ipAddress: req.ip
+            });
 
-        res.status(201).json({
-            message: "Upload, hash and digital signature OK",
-            file: req.file.path,
-            documentInfo: result
-        });
+            res.status(201).json({
+                message: "Upload, hash, digital signature and signed PDF OK",
+                file: req.file.path,
+                documentInfo: result
+            });
+        } catch (error) {
+            res.status(500).json({
+                message: "Document signing failed",
+                reason: error.message
+            });
+        }
     });
 };
 
@@ -103,4 +111,14 @@ export const getDocumentDetail = (req, res) => {
 
 export const listDocumentDetails = (req, res) => {
     res.json(getDocuments());
+};
+
+export const downloadSignedDocument = (req, res) => {
+    const signedFile = getSignedDocumentFile(req.params.documentId);
+
+    if (!signedFile || !fs.existsSync(signedFile.filePath)) {
+        return res.status(404).json({ message: "Signed PDF not found" });
+    }
+
+    res.download(signedFile.filePath, signedFile.fileName);
 };

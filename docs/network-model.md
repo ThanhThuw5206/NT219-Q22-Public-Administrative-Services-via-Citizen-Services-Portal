@@ -36,6 +36,7 @@ Tai lieu nay mo ta cach tach he thong thanh cac vung mang theo brief: Public Zon
   - token_hash
   - audit log
   - PDF storage
+  - Signed PDF storage with QR/signature metadata
 ```
 
 ## 2. Vai tro tung vung
@@ -54,7 +55,7 @@ Tai lieu nay mo ta cach tach he thong thanh cac vung mang theo brief: Public Zon
 | Public Zone | `/api/public/*` |
 | Application Zone | `/api/app/documents/*` va legacy `/api/documents/*` |
 | Crypto Zone | `backend/src/crypto/*`, `/api/internal/crypto/*` |
-| Data Zone | `document.repository.js`, `backend/src/data`, `backend/src/uploads` |
+| Data Zone | `document.repository.js`, `backend/src/data`, `backend/src/uploads`, `backend/src/signed` |
 
 ## 4. Quy tac truy cap
 
@@ -64,7 +65,11 @@ Tai lieu nay mo ta cach tach he thong thanh cac vung mang theo brief: Public Zon
 4. Crypto Zone khong tra private key. Endpoint noi bo yeu cau header `x-internal-crypto-secret`.
 5. Data Zone khong duoc truy cap truc tiep qua URL. Moi thao tac doc/ghi di qua repository/service.
 
-## 5. Cau hinh can co khi deploy that
+## 5. Thu tu ky PDF theo brief
+
+QR chi chua `document_id`, `verify_url` va token xac minh. He thong nhung QR vao PDF truoc, sau do moi tinh SHA-256 tren ban PDF cuoi cung va ky payload bang khoa rieng cua Crypto Zone. Nhu vay chu ky bao phu dung file ma nguoi dan tai ve, giup phat hien moi thay doi tren tai lieu da phat hanh.
+
+## 6. Cau hinh can co khi deploy that
 
 ```env
 PUBLIC_VERIFY_URL=https://domain.gov.vn/api/public/documents/verify

@@ -33,10 +33,11 @@ Khi upload PDF, backend se:
 
 1. Tao `document_id`.
 2. Tao token xac minh ngau nhien cho QR.
-3. Tinh SHA-256 tren file PDF cuoi cung duoc luu.
-4. Tao payload ky gom `document_id`, `file_hash`, `issued_at`, `key_id`, `version`.
-5. Ky payload qua `backend/src/crypto/signature.service.js`.
-6. Luu metadata gom hash, signature, public key, token hash va audit log.
+3. Tao ban PDF cuoi cung co QR va thong tin xac minh o trang cuoi.
+4. Tinh SHA-256 tren chinh ban PDF cuoi cung.
+5. Tao payload ky gom `document_id`, `file_hash`, `issued_at`, `key_id`, `version`.
+6. Ky payload qua `backend/src/crypto/signature.service.js`.
+7. Luu metadata gom hash file cuoi cung, signature, public key, token hash va audit log.
 
 Luu y: repo hien chua co thu vien Falcon native. `backend/src/crypto/signature.service.js` da setup interface voi `algorithm: FALCON-512`, nhung provider demo dang dung Ed25519 cua Node.js va ghi ro `signature_provider: demo-ed25519-adapter` de he thong chay duoc. Khi co thu vien Falcon/HSM, chi can thay ham `signPayload` va `verifyPayloadSignature`, cac API nghiep vu khong doi.
 
@@ -58,7 +59,15 @@ Ket qua tra ve:
 - `signature`
 - `algorithm`
 - `public_key_id`
+- `original_file_hash`
+- `signed_pdf_url`
 - `qr_payload` gom `document_id`, `verify_url`, `token`
+
+### Tai PDF da ky
+
+`GET /api/app/documents/:documentId/signed-pdf`
+
+Endpoint nay tra ve ban PDF da duoc dong khung thong tin ky so va QR xac minh. QR chua payload gom `document_id`, `verify_url` va token. Cach lam nay duoc tham khao tu source WinForms Falcon: sau khi ky payload, he thong gan chu ky/QR vao PDF de nguoi dung co the luu va chia se file da ky.
 
 ### Xac minh bang QR/token
 
@@ -75,7 +84,7 @@ Body `form-data`:
 - `file`: PDF can kiem tra
 - `token`: token trong QR payload
 
-Endpoint nay tinh lai SHA-256 cua PDF upload, dung public key de verify signature va tra ve:
+Endpoint nay tinh lai SHA-256 cua PDF upload. Theo brief, file hop le la ban PDF cuoi cung da duoc nhung QR, vi chu ky duoc tao sau buoc nhung QR.
 
 - `valid`
 - `hash_matched`
@@ -97,6 +106,7 @@ Trong production, doi gia tri nay bang bien moi truong `INTERNAL_CRYPTO_SECRET`.
 Backend tao cac file runtime sau va da duoc dua vao `.gitignore`:
 
 - `backend/src/uploads/`
+- `backend/src/signed/`
 - `backend/src/data/documents.json`
 - `backend/src/crypto/keys/falcon-demo-keypair.json`
 
