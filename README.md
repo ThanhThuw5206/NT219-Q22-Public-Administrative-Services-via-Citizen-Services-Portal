@@ -113,20 +113,29 @@ POST http://localhost:3000/api/documents/issue
 ### Response
 
 ```json
-{
-  "document_id": "HS-2026-00001",
-  "file_hash": "SHA256_HASH",
-  "signature": "FALCON_SIGNATURE",
-  "algorithm": "Falcon-512",
-  "signature_provider": "NT219-Q22",
-  "public_key_id": "falcon-public-key-01",
-  "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-00001?token=abcxyz",
-  "signed_pdf_url": "/storage/documents/HS-2026-00001/signed.pdf",
-  "qr_payload": {
-    "document_id": "HS-2026-00001",
-    "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-00001?token=abcxyz",
-    "token": "abcxyz"
-  }
+{{
+    "message": "Document issued successfully",
+    "documentInfo": {
+        "document_id": "HS-2026-64934452",
+        "file_hash": "f179875ab760ef0d175a4ff4199521cb814e8cb266ae4ecb68adaac539800a70",
+        "hash": "f179875ab760ef0d175a4ff4199521cb814e8cb266ae4ecb68adaac539800a70",
+        "signature": "Ej4FomyLHHpLwRVrYSreGY55Dyt3ksPnnfisvgeaBqDZLywdgVXQeorKY2F8xs3GV9iiWT9YgHcXy6y0/ymwBw==",
+        "algorithm": "FALCON-512",
+        "signature_provider": "demo-ed25519-adapter",
+        "public_key_id": "falcon-demo-key-001",
+        "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-64934452?token=M5DWJCk36GBchuem8wXMW3DIsywsTqijlAAPbychHXc",
+        "qr_payload": {
+            "document_id": "HS-2026-64934452",
+            "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-64934452?token=M5DWJCk36GBchuem8wXMW3DIsywsTqijlAAPbychHXc",
+            "token": "M5DWJCk36GBchuem8wXMW3DIsywsTqijlAAPbychHXc"
+        },
+        "file_path": "src\\storage\\HS-2026-64934452\\signed.pdf",
+        "signed_file": "src\\storage\\HS-2026-64934452\\signed.pdf",
+        "original_file_hash": "ec32a3e5f1a3cbd87a41b0d95d1817e12541bf1f7cc6c57d9aa41c349db566cc",
+        "signed_pdf_url": "/api/app/documents/HS-2026-64934452/signed-pdf",
+        "status": "issued",
+        "signed_at": "2026-05-17T17:08:19.790Z"
+    }
 }
 ```
 
