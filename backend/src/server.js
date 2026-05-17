@@ -10,6 +10,10 @@ import {
 import cryptoRoutes from "./routes/crypto.routes.js";
 import documentRoutes from "./routes/document.routes.js";
 import publicRoutes from "./routes/public.routes.js";
+//thêm mới so vs bản cũ
+import { ensureStorageFolders } from "./utils/storage.util.js";
+
+ensureStorageFolders();
 
 const PORT = 3000;
 
