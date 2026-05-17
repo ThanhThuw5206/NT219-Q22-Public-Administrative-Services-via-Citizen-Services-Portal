@@ -1,9 +1,16 @@
+//orchestrator
 import crypto from "crypto";
+import fs from "fs";
 import { sha256File, sha256Text } from "../crypto/hash.service.js";
 import { saveDocument, findDocumentById, listDocuments } from "./document.repository.js";
 import { buildSignaturePayload, getActiveKey, signPayload, verifyPayloadSignature } from "../crypto/signature.service.js";
 import { writeAuditLog } from "./audit.service.js";
-import { createSignedPdf } from "./signed-pdf.service.js";
+//thêm mới so vs bản cũ
+import path from "path";
+import fsExtra from "fs-extra";
+import { createDocumentFolder } from "../utils/storage.util.js";
+import { generateQrCode } from "./qr.service.js";
+import { embedQrIntoPdf } from "./pdf.service.js";
 
 const generateDocumentId = () => {
     return `HS-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
@@ -27,17 +34,35 @@ export const processDocument = async (input) => {
     } = typeof input === "string" ? { filePath: input, originalName: input } : input;
 
     const documentId = generateDocumentId();
+    //thêm mới so vs bản cũ (TẠO FOLDER RIÊNG)
+    const documentFolder = createDocumentFolder(documentId);
+    //. 
     const issuedAt = new Date().toISOString();
     const token = generateVerificationToken();
     const activeKey = getActiveKey();
     const verifyUrl = buildVerifyUrl(documentId, token);
-    const originalFileHash = sha256File(filePath);
+    //const originalFileHash = sha256File(filePath);
+    //thay câu trên thành
+    const originalPdfPath = path.join(
+    documentFolder,
+    "original.pdf"
+);
+
+await fsExtra.move(filePath, originalPdfPath, {
+    overwrite: true
+});
+
+const originalFileHash = sha256File(originalPdfPath);
+//. ĐỂ MOVE FILE GỐC
 
     const documentRecord = {
         document_id: documentId,
         owner_id: ownerId,
         original_name: originalName,
-        file_path: filePath,
+        //file_path: filePath,
+        //thay câu trên thành
+        file_path: originalPdfPath,
+        //.
         original_file_hash: originalFileHash,
         algorithm: activeKey.algorithm,
         signature_provider: activeKey.provider,
@@ -55,13 +80,34 @@ export const processDocument = async (input) => {
         signed_at: issuedAt
     };
 
-    const signedFilePath = await createSignedPdf({
-        sourceFilePath: filePath,
-        documentRecord
-    });
+    // const signedFilePath = await createSignedPdf({
+    //     sourceFilePath: filePath,
+    //     documentRecord
+    // });
+    // documentRecord.signed_file_path = signedFilePath;
+    // documentRecord.file_hash = sha256File(signedFilePath);
+    //sửa đoạn trên thành
+//1: GENERATE QR
+const qrImagePath = await generateQrCode({
+    documentId,
+    verifyUrl,
+    token
+});
 
-    documentRecord.signed_file_path = signedFilePath;
-    documentRecord.file_hash = sha256File(signedFilePath);
+// EMBED QR INTO PDF
+const signedFilePath = await embedQrIntoPdf({
+    sourceFilePath: originalPdfPath,
+    qrPath: qrImagePath,
+    outputFilePath: path.join(
+        documentFolder,
+        "signed.pdf"
+    )
+});
+
+// HASH FINAL PDF
+documentRecord.signed_file_path = signedFilePath;
+documentRecord.file_hash = sha256File(signedFilePath);
+//.
 
     const payload = buildSignaturePayload({
         documentId,
@@ -79,7 +125,17 @@ export const processDocument = async (input) => {
     documentRecord.public_key_id = signatureInfo.key_id;
 
     const savedDocument = saveDocument(documentRecord);
+    //thêm mới so vs bản cũ (TẠO METADATA FILE CHO MỖI DOCUMENT)
+    const metadataPath = path.join(
+    documentFolder,
+    "metadata.json"
+    );
 
+    fs.writeFileSync(
+        metadataPath,
+        JSON.stringify(savedDocument, null, 2)
+    );
+        
     writeAuditLog({
         action: "sign",
         documentId,

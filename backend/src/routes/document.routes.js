@@ -1,3 +1,4 @@
+
 import express from "express";
 
 import {
@@ -6,12 +7,20 @@ import {
     listDocumentDetails,
     uploadDocument,
     verifyDocumentByQr,
-    verifyDocumentByUpload
+    verifyDocumentByUpload,
+    //mới thêm
+    previewDocument,
+    issueDocument
+
 } from "../controllers/document.controller.js";
 
 const router = express.Router();
 
 router.get("/", listDocumentDetails);
+  //mới thêm
+router.get("/preview", previewDocument);
+router.post("/issue", issueDocument);
+
 router.post("/upload", uploadDocument);
 router.get("/verify/:documentId", verifyDocumentByQr);
 router.post("/verify/:documentId", verifyDocumentByUpload);

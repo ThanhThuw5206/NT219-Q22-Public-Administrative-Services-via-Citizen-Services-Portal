@@ -1,26 +1,38 @@
 import "dotenv/config";
-import express from "express";
-import cors from "cors";
+import app from "./app.js";
+
 import { NETWORK_ZONES } from "./config/network.config.js";
 import {
     attachNetworkZone,
     requireCryptoZoneAccess,
-    securityHeaders
 } from "./middlewares/network-zone.middleware.js";
+
 import cryptoRoutes from "./routes/crypto.routes.js";
 import documentRoutes from "./routes/document.routes.js";
 import publicRoutes from "./routes/public.routes.js";
+//thêm mới so vs bản cũ
+import { ensureStorageFolders } from "./utils/storage.util.js";
 
-const app = express();
+ensureStorageFolders();
 
-app.set("trust proxy", 1);
-app.use(cors());
-app.use(securityHeaders);
-app.use(express.json());
+const PORT = 3000;
 
-app.use("/api/public", attachNetworkZone(NETWORK_ZONES.PUBLIC), publicRoutes);
-app.use("/api/app/documents", attachNetworkZone(NETWORK_ZONES.APPLICATION), documentRoutes);
-app.use("/api/documents", attachNetworkZone(NETWORK_ZONES.APPLICATION), documentRoutes);
+// Routes
+app.use("/api/public",
+    attachNetworkZone(NETWORK_ZONES.PUBLIC),
+    publicRoutes
+);
+
+app.use("/api/app/documents",
+    attachNetworkZone(NETWORK_ZONES.APPLICATION),
+    documentRoutes
+);
+
+app.use("/api/documents",
+    attachNetworkZone(NETWORK_ZONES.APPLICATION),
+    documentRoutes
+);
+
 app.use(
     "/api/internal/crypto",
     attachNetworkZone(NETWORK_ZONES.CRYPTO),
@@ -28,6 +40,6 @@ app.use(
     cryptoRoutes
 );
 
-app.listen(3000, () => {
-    console.log("Server running on http://localhost:3000");
+app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
 });
