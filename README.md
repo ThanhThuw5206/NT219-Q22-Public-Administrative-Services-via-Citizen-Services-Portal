@@ -1,6 +1,35 @@
 # NT219-Q22 Public Administrative Services Portal
-
-Backend demo cho luong xac thuc tai lieu PDF bang SHA-256, chu ky so theo adapter Falcon, QR payload, token xac minh va mo hinh mang 4 zone.
+## luồng xử lý mong muốn
+Người dân nhập form
+POST /preview
+↓
+Server render PDF demo
+↓
+Người dân xem trước
+↓
+Người dân bấm xác nhận
+↓
+POST /issue
+↓
+Server:
+generate token
+→ generate QR
+→ embed QR
+→ SHA256
+→ Falcon sign
+→ save DB
+→ return signed PDF
+↓
+Trả:
+{
+  "signed_pdf_url": "...",
+  "verify_url": "...",
+  "signature": "..."
+}
+## Cài package
+```bash
+npm install qrcode fs-extra
+```
 
 ## Chay backend
 
@@ -11,35 +40,57 @@ npm run dev
 ```
 
 Server mac dinh: `http://localhost:3000`
+## Thêm api preview và issue
+Post
 
-## Mo hinh mang
+http://localhost:3000/api/documents/preview
+↓
+Nhập vd (do chưa tạo frontend gửi thông tin nên tạm dùng vd như v)
+{
+  "full_name": "Nguyen Van A",
+  "citizen_id": "0123456789",
+  "temporary_address": "HCM City"
+}
+↓
+Trả:
+{
+    "message": "Preview generated",
+    "data": {
+        "preview_id": "ba88f40e-d9d9-4e5d-a7ca-2803c0a988c5",
+        "preview_url": "/storage/preview/ba88f40e-d9d9-4e5d-a7ca-2803c0a988c5.pdf"
+    }
+}
+Post 
+http://localhost:3000/api/documents/issue
+↓
+Nhập vd
+{
+  "filePath": "C:/Users/hphun/NT219/DoAn/Public-Administrative-Services-via-Citizen-Services-Portal/backend/src/uploads/1778621489474-NT106-24521418-24521260-BT8.pdf",
+  "originalName": "tamtru.pdf",
+  "owner_id": "citizen-001"
+}
+↓
+Ket qua tra ve:
 
-Tai lieu chi tiet: [docs/network-model.md](docs/network-model.md)
+- `document_id`
+- `file_hash`
+- `signature`
+- `algorithm`
+- `signature_provider`
+- `public_key_id`
+- `verify_url`
+- `signed_pdf_url`
+- `qr_payload` gom `document_id`, `verify_url`, `token`
 
-Backend da tach route theo 4 vung:
+## Thêm storage lưu theo mã hồ sơ
+└── storage/
+    └── documents/
+        └── HS-2026-XXXXX/
+            ├── original.pdf
+            ├── signed.pdf
+            ├── qr.png
+            └── metadata.json
 
-| Zone | Route / module |
-| --- | --- |
-| Public Zone | `/api/public/*` |
-| Application Zone | `/api/app/documents/*` |
-| Crypto Zone | `/api/internal/crypto/*`, `backend/src/crypto/*` |
-| Data Zone | `backend/src/data`, `backend/src/uploads`, `document.repository.js` |
-
-Route cu `/api/documents/*` van duoc giu de tuong thich, nhung route dung theo mo hinh la `/api/app/documents/*`.
-
-## Luong ky so Falcon
-
-Khi upload PDF, backend se:
-
-1. Tao `document_id`.
-2. Tao token xac minh ngau nhien cho QR.
-3. Tao ban PDF cuoi cung co QR va thong tin xac minh o trang cuoi.
-4. Tinh SHA-256 tren chinh ban PDF cuoi cung.
-5. Tao payload ky gom `document_id`, `file_hash`, `issued_at`, `key_id`, `version`.
-6. Ky payload qua `backend/src/crypto/signature.service.js`.
-7. Luu metadata gom hash file cuoi cung, signature, public key, token hash va audit log.
-
-Luu y: repo hien chua co thu vien Falcon native. `backend/src/crypto/signature.service.js` da setup interface voi `algorithm: FALCON-512`, nhung provider demo dang dung Ed25519 cua Node.js va ghi ro `signature_provider: demo-ed25519-adapter` de he thong chay duoc. Khi co thu vien Falcon/HSM, chi can thay ham `signPayload` va `verifyPayloadSignature`, cac API nghiep vu khong doi.
 
 ## API chinh
 
@@ -84,30 +135,38 @@ Body `form-data`:
 - `file`: PDF can kiem tra
 - `token`: token trong QR payload
 
-Endpoint nay tinh lai SHA-256 cua PDF upload. Theo brief, file hop le la ban PDF cuoi cung da duoc nhung QR, vi chu ky duoc tao sau buoc nhung QR.
-
-- `valid`
-- `hash_matched`
-- `signature_valid`
-- `reason`
-
-### Xem public key cua Crypto Zone
-
-`GET /api/internal/crypto/public-key`
-
-Header bat buoc:
-
-- `x-internal-crypto-secret: change-this-crypto-zone-secret`
-
-Trong production, doi gia tri nay bang bien moi truong `INTERNAL_CRYPTO_SECRET`.
-
-## File runtime
-
-Backend tao cac file runtime sau va da duoc dua vao `.gitignore`:
-
-- `backend/src/uploads/`
-- `backend/src/signed/`
-- `backend/src/data/documents.json`
-- `backend/src/crypto/keys/falcon-demo-keypair.json`
-
-Trong ban production, private key Falcon phai nam trong Key Vault/HSM, khong luu trong source code hoac database.
+## CẤU TRÚC PROJECT HIỆN TẠI
+src/
+│
+├── controllers/
+│   └── document.controller.js
+│
+├── routes/
+│   └── document.route.js
+│
+├── services/
+│   ├── document.service1.js      ← orchestrator chính đc tạo mới thay vì sửa    |   |                                file cũ
+│   ├── qr.service.js
+│   ├── pdf.service.js
+│   ├── signed-pdf.service.js
+│   ├── audit.service.js
+│   ├── preview.service.js
+│   └── document.repository.js
+│
+├── crypto/
+│   ├── hash.service.js
+│   ├── signature.service.js
+│   └── falcon.service.js
+│
+├── utils/
+│   └── storage.util.js
+│
+├── uploads/
+│
+└── storage/
+    └── documents/
+        └── HS-2026-XXXXX/
+            ├── original.pdf
+            ├── signed.pdf
+            ├── qr.png
+            └── metadata.json
