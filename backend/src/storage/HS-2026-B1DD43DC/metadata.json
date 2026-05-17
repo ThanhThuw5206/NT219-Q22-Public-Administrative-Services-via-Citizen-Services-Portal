@@ -1,0 +1,25 @@
+{
+  "document_id": "HS-2026-B1DD43DC",
+  "owner_id": "demo-citizen",
+  "original_name": "cv.pdf",
+  "file_path": "src\\storage\\HS-2026-B1DD43DC\\original.pdf",
+  "original_file_hash": "03097b4ecaf5450101c396e0a199ebcac0faed2491bcf9add60fb0d2c7fe0711",
+  "algorithm": "FALCON-512",
+  "signature_provider": "demo-ed25519-adapter",
+  "public_key_id": "falcon-demo-key-001",
+  "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEARWUa8WUcT/xOtEw0XBIUiyCMX08ebX+UBwdXoNJ6yD0=\n-----END PUBLIC KEY-----\n",
+  "token_hash": "cf1281fe8367cdfb2e6761fb47ac44edecc576e842c5d6bbad634385da06a0da",
+  "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-B1DD43DC?token=u7QyFM-o8DhN5EGGXuVvlh9aZJ8RW47qHORA1CMdA4E",
+  "qr_payload": {
+    "document_id": "HS-2026-B1DD43DC",
+    "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-B1DD43DC?token=u7QyFM-o8DhN5EGGXuVvlh9aZJ8RW47qHORA1CMdA4E",
+    "token": "u7QyFM-o8DhN5EGGXuVvlh9aZJ8RW47qHORA1CMdA4E"
+  },
+  "status": "issued",
+  "created_at": "2026-05-17T14:42:56.927Z",
+  "signed_at": "2026-05-17T14:42:56.927Z",
+  "signed_file_path": "src\\storage\\HS-2026-B1DD43DC\\signed.pdf",
+  "file_hash": "8e6210bd3fa2b1e0942eaac42e88ced8308d49b808a59004cb5899405e984a91",
+  "signature": "Uq7/n7CZDs7orkeCQ+6JHjRwL3d7g8RBncEENRHGcjNjsvv/Lf69md7W3aIguRanDCCeypX02HtmYsw+hCl2BQ==",
+  "signature_payload": "{\"document_id\":\"HS-2026-B1DD43DC\",\"file_hash\":\"8e6210bd3fa2b1e0942eaac42e88ced8308d49b808a59004cb5899405e984a91\",\"issued_at\":\"2026-05-17T14:42:56.927Z\",\"key_id\":\"falcon-demo-key-001\",\"version\":1}"
+}

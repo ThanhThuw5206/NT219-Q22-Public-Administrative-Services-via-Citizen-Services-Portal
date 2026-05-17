@@ -1,19 +1,113 @@
-# NT219-Q22-Public-Administrative-Services-via-Citizen-Services-Portal
+# NT219-Q22 Public Administrative Services Portal
 
-# 🚀 Hướng dẫn chạy Backend
+Backend demo cho luong xac thuc tai lieu PDF bang SHA-256, chu ky so theo adapter Falcon, QR payload, token xac minh va mo hinh mang 4 zone.
 
-## 1. Cài đặt dependencies
-
-Chạy lệnh sau để cài các thư viện cần thiết:
+## Chay backend
 
 ```bash
-npm install express dotenv cors sequelize mysql2 multer uuid
-```
-```bash
+cd backend
+npm install
 npm run dev
 ```
-# test api
-- http://localhost:3000/api/documents/upload
-- status: post
-- tab: body->form-data
-- key:file; type:file-> chọn file pdf->send
+
+Server mac dinh: `http://localhost:3000`
+
+## Mo hinh mang
+
+Tai lieu chi tiet: [docs/network-model.md](docs/network-model.md)
+
+Backend da tach route theo 4 vung:
+
+| Zone | Route / module |
+| --- | --- |
+| Public Zone | `/api/public/*` |
+| Application Zone | `/api/app/documents/*` |
+| Crypto Zone | `/api/internal/crypto/*`, `backend/src/crypto/*` |
+| Data Zone | `backend/src/data`, `backend/src/uploads`, `document.repository.js` |
+
+Route cu `/api/documents/*` van duoc giu de tuong thich, nhung route dung theo mo hinh la `/api/app/documents/*`.
+
+## Luong ky so Falcon
+
+Khi upload PDF, backend se:
+
+1. Tao `document_id`.
+2. Tao token xac minh ngau nhien cho QR.
+3. Tao ban PDF cuoi cung co QR va thong tin xac minh o trang cuoi.
+4. Tinh SHA-256 tren chinh ban PDF cuoi cung.
+5. Tao payload ky gom `document_id`, `file_hash`, `issued_at`, `key_id`, `version`.
+6. Ky payload qua `backend/src/crypto/signature.service.js`.
+7. Luu metadata gom hash file cuoi cung, signature, public key, token hash va audit log.
+
+Luu y: repo hien chua co thu vien Falcon native. `backend/src/crypto/signature.service.js` da setup interface voi `algorithm: FALCON-512`, nhung provider demo dang dung Ed25519 cua Node.js va ghi ro `signature_provider: demo-ed25519-adapter` de he thong chay duoc. Khi co thu vien Falcon/HSM, chi can thay ham `signPayload` va `verifyPayloadSignature`, cac API nghiep vu khong doi.
+
+## API chinh
+
+### Upload va ky PDF
+
+`POST /api/app/documents/upload`
+
+Body `form-data`:
+
+- `file`: PDF
+- `owner_id`: optional
+
+Ket qua tra ve:
+
+- `document_id`
+- `file_hash`
+- `signature`
+- `algorithm`
+- `public_key_id`
+- `original_file_hash`
+- `signed_pdf_url`
+- `qr_payload` gom `document_id`, `verify_url`, `token`
+
+### Tai PDF da ky
+
+`GET /api/app/documents/:documentId/signed-pdf`
+
+Endpoint nay tra ve ban PDF da duoc dong khung thong tin ky so va QR xac minh. QR chua payload gom `document_id`, `verify_url` va token. Cach lam nay duoc tham khao tu source WinForms Falcon: sau khi ky payload, he thong gan chu ky/QR vao PDF de nguoi dung co the luu va chia se file da ky.
+
+### Xac minh bang QR/token
+
+`GET /api/public/documents/verify/:documentId?token=...`
+
+Endpoint nay kiem tra token va chu ky tren ban ghi da phat hanh.
+
+### Xac minh bang upload PDF
+
+`POST /api/public/documents/verify/:documentId`
+
+Body `form-data`:
+
+- `file`: PDF can kiem tra
+- `token`: token trong QR payload
+
+Endpoint nay tinh lai SHA-256 cua PDF upload. Theo brief, file hop le la ban PDF cuoi cung da duoc nhung QR, vi chu ky duoc tao sau buoc nhung QR.
+
+- `valid`
+- `hash_matched`
+- `signature_valid`
+- `reason`
+
+### Xem public key cua Crypto Zone
+
+`GET /api/internal/crypto/public-key`
+
+Header bat buoc:
+
+- `x-internal-crypto-secret: change-this-crypto-zone-secret`
+
+Trong production, doi gia tri nay bang bien moi truong `INTERNAL_CRYPTO_SECRET`.
+
+## File runtime
+
+Backend tao cac file runtime sau va da duoc dua vao `.gitignore`:
+
+- `backend/src/uploads/`
+- `backend/src/signed/`
+- `backend/src/data/documents.json`
+- `backend/src/crypto/keys/falcon-demo-keypair.json`
+
+Trong ban production, private key Falcon phai nam trong Key Vault/HSM, khong luu trong source code hoac database.
