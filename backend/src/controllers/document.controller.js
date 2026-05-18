@@ -139,8 +139,8 @@ export const uploadDocument = (req, res) => {
     });
 };
 
-export const verifyDocumentByQr = (req, res) => {
-    const result = verifyDocument({
+export const verifyDocumentByQr = async (req, res) => {
+    const result = await verifyDocument({
         documentId: req.params.documentId,
         token: req.query.token,
         actor: req.query.actor || "qr-verifier",
@@ -151,7 +151,7 @@ export const verifyDocumentByQr = (req, res) => {
 };
 
 export const verifyDocumentByUpload = (req, res) => {
-    upload.single("file")(req, res, function (err) {
+    upload.single("file")(req, res, async function (err) {
         if (err) {
             return res.status(400).json({ message: err.message || "Upload error" });
         }
@@ -160,7 +160,7 @@ export const verifyDocumentByUpload = (req, res) => {
             return res.status(400).json({ message: "No file uploaded" });
         }
 
-        const result = verifyDocument({
+        const result = await verifyDocument({
             documentId: req.params.documentId,
             token: req.body.token || req.query.token,
             filePath: req.file.path,

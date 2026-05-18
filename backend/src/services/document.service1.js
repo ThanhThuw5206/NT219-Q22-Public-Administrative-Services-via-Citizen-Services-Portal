@@ -39,7 +39,7 @@ export const processDocument = async (input) => {
     //. 
     const issuedAt = new Date().toISOString();
     const token = generateVerificationToken();
-    const activeKey = getActiveKey();
+    const activeKey = await getActiveKey();
     const verifyUrl = buildVerifyUrl(documentId, token);
     //const originalFileHash = sha256File(filePath);
     //thay câu trên thành
@@ -116,7 +116,7 @@ documentRecord.file_hash = sha256File(signedFilePath);
         keyId: activeKey.key_id,
         version: 1
     });
-    const signatureInfo = signPayload(payload);
+    const signatureInfo = await signPayload(payload);
 
     documentRecord.signature = signatureInfo.signature;
     documentRecord.signature_payload = payload;
@@ -167,7 +167,7 @@ documentRecord.file_hash = sha256File(signedFilePath);
     };
 };
 
-export const verifyDocument = ({ documentId, token, filePath = null, actor = "anonymous", ipAddress = null }) => {
+export const verifyDocument = async ({ documentId, token, filePath = null, actor = "anonymous", ipAddress = null }) => {
     const document = findDocumentById(documentId);
 
     if (!document) {
@@ -204,7 +204,7 @@ export const verifyDocument = ({ documentId, token, filePath = null, actor = "an
         keyId: document.public_key_id,
         version: 1
     });
-    const signatureValid = verifyPayloadSignature({
+    const signatureValid = await verifyPayloadSignature({
         payload,
         signature: document.signature,
         publicKey: document.public_key
