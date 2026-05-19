@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "db:init": "node src/libs/init-db.js"
+    "db:init": "node src/libs/init-db.js",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:properties": "vitest run tests/properties"
   },
   "keywords": [],
   "author": "",
@@ -34,7 +37,9 @@
     "yamljs": "^0.3.0"
   },
   "devDependencies": {
+    "fast-check": "^4.1.1",
     "nodemon": "^3.1.14",
-    "semver": "^7.8.0"
+    "semver": "^7.8.0",
+    "vitest": "^3.2.3"
   }
 }
