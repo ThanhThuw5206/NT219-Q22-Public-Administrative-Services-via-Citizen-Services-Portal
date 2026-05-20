@@ -54,7 +54,22 @@ CREATE TABLE user_roles
     FOREIGN KEY (assigned_by) REFERENCES users(id)
 );
 
--- 5. DOCUMENTS
+-- 5. KEYS
+-- Lưu public key (KHÔNG lưu private key)
+
+CREATE TABLE keys (
+    key_id INT PRIMARY KEY AUTO_INCREMENT,
+    algorithm VARCHAR(50) NOT NULL,
+    -- ví dụ: FALCON
+    public_key TEXT NOT NULL,
+    status ENUM('active', 'revoked', 'expired') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expired_at TIMESTAMP NULL
+    ALTER TABLE keys ADD COLUMN user_id INT NOT NULL AFTER key_id;
+    ALTER TABLE keys ADD FOREIGN KEY (user_id) REFERENCES users(id);
+);
+
+-- 6. DOCUMENTS
 -- Lưu thông tin tài liệu/hồ sơ
 
 CREATE TABLE documents (
@@ -75,19 +90,6 @@ CREATE TABLE documents (
     signed_at TIMESTAMP NULL,
     FOREIGN KEY (owner_id) REFERENCES users(id),
     FOREIGN KEY (public_key_id) REFERENCES keys(key_id)
-);
-
--- 6. KEYS
--- Lưu public key (KHÔNG lưu private key)
-
-CREATE TABLE keys (
-    key_id INT PRIMARY KEY AUTO_INCREMENT,
-    algorithm VARCHAR(50) NOT NULL,
-    -- ví dụ: FALCON
-    public_key TEXT NOT NULL,
-    status ENUM('active', 'revoked', 'expired') DEFAULT 'active',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expired_at TIMESTAMP NULL
 );
 
 -- 7. DOCUMENT_SIGNATURES
@@ -152,10 +154,118 @@ CREATE TABLE audit_logs (
     FOREIGN KEY (document_id) REFERENCES documents(document_id)
 );
 
--- 10. INDEX (TỐI ƯU HIỆU NĂNG)
+-- 10. TEMP_RESIDENCE_REGISTRATIONS
+-- Đăng ký tạm trú
 
-CREATE INDEX idx_documents_owner ON documents(owner_id);
-CREATE INDEX idx_signature_doc ON document_signatures(document_id);
-CREATE INDEX idx_token_hash ON verification_tokens(token_hash);
-CREATE INDEX idx_audit_user ON audit_logs(user_id);
-CREATE INDEX idx_audit_doc ON audit_logs(document_id);
+CREATE TABLE temp_residence_registrations (
+    registration_id INT PRIMARY KEY AUTO_INCREMENT,
+
+    citizen_id INT NOT NULL,
+    -- Người đăng ký
+    current_address TEXT NOT NULL,
+    -- Địa chỉ thường trú
+    temporary_address TEXT NOT NULL,
+    -- Địa chỉ tạm trú
+    reason TEXT,
+    -- Lý do:
+    -- học tập, lao động,...
+    start_date DATE NOT NULL,
+
+    end_date DATE NOT NULL,
+
+    guardian_consent BOOLEAN DEFAULT FALSE,
+    -- dành cho người chưa thành niên
+    status ENUM(
+        'pending',
+        'approved',
+        'rejected',
+        'expired',
+        'cancelled'
+    ) DEFAULT 'pending',
+    reviewed_by INT NULL,
+    reviewed_at TIMESTAMP NULL,
+    rejection_reason TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_temp_residence_dates
+    CHECK (
+        end_date > start_date
+        AND DATEDIFF(end_date, start_date) <= 730
+    ),
+
+    FOREIGN KEY (citizen_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    FOREIGN KEY (reviewed_by)
+        REFERENCES users(id)
+        ON DELETE SET NULL
+        ON UPDATE CASCADE
+);
+
+-- 11. TEMP_RESIDENCE_DOCUMENTS
+-- Giấy tờ minh chứng
+
+CREATE TABLE temp_residence_documents (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    registration_id INT NOT NULL,
+    document_id INT NOT NULL,   -- tham chiếu đến bảng documents
+    document_type ENUM('residence_form', 'legal_residence_proof', 'guardian_consent', 'other') NOT NULL,
+   
+    attached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (registration_id) REFERENCES temp_residence_registrations(registration_id),
+    FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE CASCADE
+);
+-- 12. TEMP_RESIDENCE_EXTENSIONS
+-- Gia hạn tạm trú
+
+CREATE TABLE temp_residence_extensions (
+    extension_id INT PRIMARY KEY AUTO_INCREMENT,
+    registration_id INT NOT NULL,
+    old_end_date DATE NOT NULL,
+    new_end_date DATE NOT NULL,
+    reason TEXT,
+
+    status ENUM(
+        'pending',
+        'approved',
+        'rejected'
+    ) DEFAULT 'pending',
+
+    approved_by INT NULL,
+    approved_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (registration_id)
+        REFERENCES temp_residence_registrations(registration_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    FOREIGN KEY (approved_by)
+        REFERENCES users(id)
+        ON DELETE SET NULL
+        ON UPDATE CASCADE
+);
+
+-- 13. INDEXES
+
+CREATE INDEX idx_temp_residence_citizen
+ON temp_residence_registrations(citizen_id);
+
+CREATE INDEX idx_temp_residence_status
+ON temp_residence_registrations(status);
+
+CREATE INDEX idx_temp_residence_dates
+ON temp_residence_registrations(start_date, end_date);
+
+CREATE INDEX idx_temp_documents_registration
+ON temp_residence_documents(registration_id);
+
+CREATE INDEX idx_temp_extensions_registration
+ON temp_residence_extensions(registration_id);
+
+CREATE INDEX idx_documents_token_hash 
+ON documents(token_hash);
+
+CREATE INDEX idx_verification_tokens_token_hash 
+ON verification_tokens(token_hash);
