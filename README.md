@@ -3,26 +3,34 @@
 ## Luồng xử lý mong muốn
 
 ```text
-Người dân nhập form
-        ↓
+Citizen nhập form
+    ↓
+Frontend validate
+    ↓
 POST /preview
-        ↓
-Server render PDF demo
-        ↓
-Người dân xem trước
-        ↓
-Người dân bấm xác nhận
-        ↓
+    ↓
+Backend:
+    - map dữ liệu vào PDF template CT01
+    - render PDF preview
+    - lưu preview tạm
+    - trả preview_url + preview_id
+    ↓
+Citizen xem preview
+    ↓
+Citizen bấm xác nhận
+    ↓
 POST /issue
-        ↓
-Server:
-generate token
-→ generate QR
-→ embed QR
-→ SHA256
-→ Falcon sign
-→ save DB
-→ return signed PDF
+    ↓
+Backend:
+    - lấy preview data
+    - generate document_id
+    - generate token chống giả mạo
+    - generate QR chứa verify URL
+    - embed QR vào PDF
+    - SHA256 PDF
+    - Falcon sign hash
+    - embed signature metadata
+    - lưu DB
         ↓
 Trả:
 {
