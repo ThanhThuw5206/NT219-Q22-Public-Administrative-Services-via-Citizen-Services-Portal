@@ -36,11 +36,11 @@ app.use(
     cryptoRoutes
 );
 
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-});
-
 app.use(
     "/storage",
     express.static(path.resolve("storage"))
 );
+
+app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+});
