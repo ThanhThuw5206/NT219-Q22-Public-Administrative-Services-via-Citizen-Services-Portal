@@ -46,6 +46,12 @@ Trả:
 
 ```bash
 npm install qrcode fs-extra
+
+npm install pdf-lib
+
+npm install @noble/post-quantum
+
+npm install @pdf-lib/fontkit
 ```
 
 ---
@@ -79,22 +85,38 @@ POST http://localhost:3000/api/documents/preview
 ### Request body
 
 ```json
-{
-  "full_name": "Nguyen Van A",
-  "citizen_id": "0123456789",
-  "temporary_address": "HCM City"
-}
+{ "owner_id": 1, "office_name": "Công an phường Linh Trung", "full_name": "Nguyễn Văn A", "birth_day": "01", "birth_month": "01", "birth_year": "2000", "gender": "Nam", "citizen_id": "079203123456", "phone": "0909999999", "email": "nguyenvana@gmail.com", "householder_name": "Nguyễn Văn B", "householder_id": "079203654321", "householder_phone": "0911111111", "householder_address": "Linh Trung", "relationship": "người thuê", "request_content": "Đăng ký tạm trú phục vụ học tập tại UIT" }
 ```
 
 ### Response
 
 ```json
 {
-  "message": "Preview generated",
-  "data": {
-    "preview_id": "ba88f40e-d9d9-4e5d-a7ca-2803c0a988c5",
-    "preview_url": "/storage/preview/ba88f40e-d9d9-4e5d-a7ca-2803c0a988c5.pdf"
-  }
+    "message": "Preview generated",
+    "data": {
+        "preview_id": "7e75199a-4bd3-4b3f-94e9-fc47a4df5a84",
+        "document_id": "HS-2026-E406855E",
+        "preview_url": "/storage/documents/HS-2026-E406855E/preview.pdf",
+        "file_path": "C:\\Users\\hphun\\NT219\\DoAn\\Public-Administrative-Services-via-Citizen-Services-Portal\\backend\\storage\\documents\\HS-2026-E406855E\\preview.pdf",
+        "form_data": {
+            "owner_id": 1,
+            "office_name": "Công an phường Linh Trung",
+            "full_name": "Nguyễn Văn A",
+            "birth_day": "01",
+            "birth_month": "01",
+            "birth_year": "2000",
+            "gender": "Nam",
+            "citizen_id": "079203123456",
+            "phone": "0909999999",
+            "email": "nguyenvana@gmail.com",
+            "householder_name": "Nguyễn Văn B",
+            "householder_id": "079203654321",
+            "householder_phone": "0911111111",
+            "householder_address": "Linh Trung",
+            "relationship": "người thuê",
+            "request_content": "Đăng ký tạm trú phục vụ học tập tại UIT"
+        }
+    }
 }
 ```
 
@@ -112,37 +134,36 @@ POST http://localhost:3000/api/documents/issue
 
 ```json
 {
-  "filePath": "C:/Users/hphun/NT219/DoAn/Public-Administrative-Services-via-Citizen-Services-Portal/backend/src/uploads/1778621489474-NT106-24521418-24521260-BT8.pdf",
-  "originalName": "tamtru.pdf",
-  "owner_id": "citizen-001"
+  "preview_id": "3a1f2a45-b095-4a88-b512-3ce7e1750f94",
+  "owner_id": 1
 }
 ```
 
 ### Response
 
 ```json
-{{
+{
     "message": "Document issued successfully",
     "documentInfo": {
-        "document_id": "HS-2026-64934452",
-        "file_hash": "f179875ab760ef0d175a4ff4199521cb814e8cb266ae4ecb68adaac539800a70",
-        "hash": "f179875ab760ef0d175a4ff4199521cb814e8cb266ae4ecb68adaac539800a70",
-        "signature": "Ej4FomyLHHpLwRVrYSreGY55Dyt3ksPnnfisvgeaBqDZLywdgVXQeorKY2F8xs3GV9iiWT9YgHcXy6y0/ymwBw==",
+        "document_id": "HS-2026-DF25B570",
+        "file_hash": "a8cf0930c38647efb4cced489c8537c6fa0bd59e5e69116dbbacc420255ae943",
+        "hash": "a8cf0930c38647efb4cced489c8537c6fa0bd59e5e69116dbbacc420255ae943",
+        "signature": "OZRc8pVrgEdpjlO9xGMmvtnxc74EeNE7EXitZjkC1GO7u9SoO1T2rtRWaOGeiUo41NWXdAmKT3YIymKVlWw/gx8U6tBmWs58NN958kVvgaDlRpSIi2SLYFvRHBGUSpKRcrVyCSxCHc+evTeUodePRReIPZMPULGajIxHFVtlZNyfb1FGkKt/v3qJ2GwY1+IvcuRlexNjQPHxP47DGqbCdlTSkPc6jLsjGY66HdSCAU5o6b42AZhrCBuExDabT0qKrmi5pobgQ6tRFlvXIJsrkOTSt+KSMxhv3wbHJYlp00gs13c8Thl7R3nbRwpI4MFUfiVfNu/foKRctPFl1a0hNJXkmMYL8k5bfNiSbNtc+2g1Vbr/alsJmmGes3cXc/Gsn4NTl2CJH8qEwIaX3+Za2x6iq2ejYOiEM+Xr9bRxtDJ/j08l0Pl5RCyPsQhBlw9+qaLBTAqc1U59M+rVKq6jU2J0fDMEmNeUXW4Iz4mNr2zFGWxnRk59+KJpgqyim/7F406QOtQ89l8MfrI8zZJzGYai8b+7xSIzCJ0dXIpM0HolwvbFFltamIdROW8e6RnQL20RyNwrLxopHsy4Wr+qJ86CNAMy7cffepUlpZ8wjmpWRzXacX9Z3ykRd2fUFana98jZovfIL/6/6rLHIQ+YNdYJ/roTkWF4ano/E2RWNmTR83vvd5k0nvSbgieNmdeei1rF2O44LI9Htp2zS4uv98LeK1UPAp2DZL1bD95wt2YRTLmeO/Hh33XxTDpUjCxkjXQeTEwU8EzjTECk4n2UJEtobzUePM+W1VBSXEsFRGjRiUtBW5Ck0oxG68xqbwlDzIEs/+u2U9OuxYTkk8RYacHhfJssb9f7Oqi1EUlz6w==",
         "algorithm": "FALCON-512",
-        "signature_provider": "demo-ed25519-adapter",
-        "public_key_id": "falcon-demo-key-001",
-        "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-64934452?token=M5DWJCk36GBchuem8wXMW3DIsywsTqijlAAPbychHXc",
+        "signature_provider": "crypto-zone",
+        "public_key_id": "falcon-development-key-02597ccf",
+        "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-DF25B570?token=KfqH5dg1RzCK5QHEDQXipES7FEROOSZ5hRCzhwHo07k",
         "qr_payload": {
-            "document_id": "HS-2026-64934452",
-            "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-64934452?token=M5DWJCk36GBchuem8wXMW3DIsywsTqijlAAPbychHXc",
-            "token": "M5DWJCk36GBchuem8wXMW3DIsywsTqijlAAPbychHXc"
+            "document_id": "HS-2026-DF25B570",
+            "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-DF25B570?token=KfqH5dg1RzCK5QHEDQXipES7FEROOSZ5hRCzhwHo07k",
+            "token": "KfqH5dg1RzCK5QHEDQXipES7FEROOSZ5hRCzhwHo07k"
         },
-        "file_path": "src\\storage\\HS-2026-64934452\\signed.pdf",
-        "signed_file": "src\\storage\\HS-2026-64934452\\signed.pdf",
-        "original_file_hash": "ec32a3e5f1a3cbd87a41b0d95d1817e12541bf1f7cc6c57d9aa41c349db566cc",
-        "signed_pdf_url": "/api/app/documents/HS-2026-64934452/signed-pdf",
+        "file_path": "C:\\Users\\hphun\\NT219\\DoAn\\Public-Administrative-Services-via-Citizen-Services-Portal\\backend\\storage\\documents\\HS-2026-DF25B570\\signed.pdf",
+        "signed_file": "C:\\Users\\hphun\\NT219\\DoAn\\Public-Administrative-Services-via-Citizen-Services-Portal\\backend\\storage\\documents\\HS-2026-DF25B570\\signed.pdf",
+        "original_file_hash": "c55fa7bec43921665992042db04fd183771823551e615ba6fe6e0224b41f4119",
+        "signed_pdf_url": "/api/app/documents/HS-2026-DF25B570/signed-pdf",
         "status": "issued",
-        "signed_at": "2026-05-17T17:08:19.790Z"
+        "signed_at": "2026-05-23T16:21:18.157Z"
     }
 }
 ```
@@ -152,16 +173,28 @@ POST http://localhost:3000/api/documents/issue
 # Storage lưu theo mã hồ sơ
 
 ```text
-storage/
-└── documents/
-    └── HS-2026-XXXXX/
-        ├── original.pdf
-        ├── signed.pdf
-        ├── qr.png
-        └── metadata.json
+backend
+└──storage/
+    └── documents/
+        └── HS-2026-XXXXX/
+            ├── preview.pdf
+            ├── signed.pdf
+            ├── qr.png
+            └── metadata.json
 ```
 
 ---
+# Sửa 1 vài vấn đề bảo mật
+- xóa trường token trong mã qr, url
+- xóa app.use("/api/documents", ...)
+- thêm metadata cho sign.pdf
+- tạo preview file
+- thay vì cho client hiện rõ filepath thì chỉ cho hiện preview_id, server phải tự tìm path thật
+- thêm DB: path của 2 file pdf, preview_id trong document; thêm bảng preview table
+# Thêm file
+- src/repositories/preview.repository.js
+- src/templates/CT01.pdf
+- src/validators/ct01.validator.js
 
 # API chính
 
@@ -271,43 +304,46 @@ POST /api/public/documents/verify/:documentId
 # Cấu trúc project hiện tại
 
 ```text
-src/
+
+└──src/
+│    │
+│    ├── controllers/
+│    │   └── document.controller.js
+│    │
+│    ├── routes/
+│    │   └── document.route.js
+│    │
+│    ├── services/
+│    │   ├── document.service1.js
+│    │   │      ← orchestrator chính được tạo mới
+│    │   │         thay vì sửa file cũ
+│    │   │
+│    │   ├── qr.service.js
+│    │   ├── pdf.service.js
+│    │   ├── signed-pdf.service.js
+│    │   ├── audit.service.js
+│    │   ├── preview.service.js
+│    │   └── document.repository.js
+│    │
+│    ├── crypto/
+│    │   ├── hash.service.js
+│    │   ├── hash.service.js
+│    │   ├── signature.service.js
+│    │   └── falcon.service.js
+│    │
+│    ├── utils/
+│    │   └── storage.util.js
+│    │
+│    └──uploads/
 │
-├── controllers/
-│   └── document.controller.js
 │
-├── routes/
-│   └── document.route.js
-│
-├── services/
-│   ├── document.service1.js
-│   │      ← orchestrator chính được tạo mới
-│   │         thay vì sửa file cũ
-│   │
-│   ├── qr.service.js
-│   ├── pdf.service.js
-│   ├── signed-pdf.service.js
-│   ├── audit.service.js
-│   ├── preview.service.js
-│   └── document.repository.js
-│
-├── crypto/
-│   ├── hash.service.js
-│   ├── signature.service.js
-│   └── falcon.service.js
-│
-├── utils/
-│   └── storage.util.js
-│
-├── uploads/
-│
-└── storage/
+└──storage/
     └── documents/
         └── HS-2026-XXXXX/
-            ├── original.pdf
+            ├── preview.pdf
             ├── signed.pdf
             ├── qr.png
-            └── metadata.json
+            └── metadata.json    
 ```
 
 ---
@@ -362,3 +398,5 @@ Hệ thống hỗ trợ:
 - Trả PDF đã ký
 - Lưu metadata hồ sơ
 - Quản lý storage theo mã hồ sơ
+
+
