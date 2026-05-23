@@ -18,7 +18,7 @@ const router = express.Router();
 
 router.get("/", listDocumentDetails);
   //mới thêm
-router.get("/preview", previewDocument);
+router.post("/preview", previewDocument);
 router.post("/issue", issueDocument);
 
 router.post("/upload", uploadDocument);
