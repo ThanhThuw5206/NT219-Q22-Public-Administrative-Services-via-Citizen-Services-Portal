@@ -1,30 +1,9 @@
-
 import express from "express";
 
-import {
-    downloadSignedDocument,
-    getDocumentDetail,
-    listDocumentDetails,
-    uploadDocument,
-    verifyDocumentByQr,
-    verifyDocumentByUpload,
-    //mới thêm
-    previewDocument,
-    issueDocument
-
-} from "../controllers/document.controller.js";
+import { uploadDocument } from "../controllers/document.controller.js";
 
 const router = express.Router();
 
-router.get("/", listDocumentDetails);
-  //mới thêm
-router.post("/preview", previewDocument);
-router.post("/issue", issueDocument);
-
 router.post("/upload", uploadDocument);
-router.get("/verify/:documentId", verifyDocumentByQr);
-router.post("/verify/:documentId", verifyDocumentByUpload);
-router.get("/:documentId/signed-pdf", downloadSignedDocument);
-router.get("/:documentId", getDocumentDetail);
 
 export default router;
