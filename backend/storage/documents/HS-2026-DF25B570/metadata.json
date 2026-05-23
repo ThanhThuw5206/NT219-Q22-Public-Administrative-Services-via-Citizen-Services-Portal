@@ -1,0 +1,25 @@
+{
+  "document_id": "HS-2026-DF25B570",
+  "owner_id": 1,
+  "original_name": "CT01.pdf",
+  "file_path": "C:\\Users\\hphun\\NT219\\DoAn\\Public-Administrative-Services-via-Citizen-Services-Portal\\backend\\storage\\documents\\HS-2026-DF25B570\\original.pdf",
+  "original_file_hash": "c55fa7bec43921665992042db04fd183771823551e615ba6fe6e0224b41f4119",
+  "algorithm": "FALCON-512",
+  "signature_provider": "crypto-zone",
+  "public_key_id": "falcon-development-key-02597ccf",
+  "public_key": "CUpUhRNljaBjAV7HZsKzABH7NnBjFZ2Sfeu/iVCwNQs381vYCWo6xKCOd2M97nTIRa5THWVAPw+nuhSul3EKwGbMNaKnXxx8vbYoTAFqLJViETIWnSxM3PRXK9kX7Mlxwqh+D2310Zsd4C+lDqneBnldal2kxYsCKc42C1UkKRrarSDsU+BZiE+4yFrjCn7ABt2st3qw2uC8Uta/PNqGmCqHSygnQtadXrA8vUQpaK8IbaaWQhi+jvwmgQ+EuGB1QwJfi+Allg2JukMHZdKZsb+ZHRMWZ1IAZVggmO67VEbHGLqQmpfD+oCYKasKmgaq/uvg69PUfeGSBQCrP08FAcOHHIowZOUHFWgwsTbny7vuiQvGKKnmT+2LUNzo5pCCIQlHxiItDDPxYEgriwCsQjNxKkXsfwIUYFTSjngiNVXm114nCAAIuKiiANw8SopRzIHBd0AH2tplsQir+xBcQDSoMfErd64Bd4UnADtvUAl0mI3fSopaJH8KDruB3LhwTTxzsFS7xRPyVqxOAnaAP3T15pflh/ixVDeC5dTYfGoiW0RFbRhsU+UtY8CupVa0OpdrDAJe9XDpzCwEKUmBD25krKvnN0XpTD0t5LRB7CpJ3IJKxx2z+VwHg8MvSHT86+eBgI7gb0mPauRxJoKLZOvRTEWh23Nm7ypdzem00NyYMX3biY3tGO2p+h5AfyTA6UhgAKxDSsPbh4nLFDDMpWong3FCycq+EJkvFFGnLN/go64huNFYGhFgyKeTr2Rzpr+5fIKod4ULa1hMnoflZvaQLxo6GFYL/8F2WiHPRX/FzIbEHddKD51fAVKJ7K0GYRzi4bKfZHXFCnNaaAxlxtVZNtSbYWQr9GEubHdGOISShsieHfgWoRA7BI1BykgYhDi5gQCXkLZ/jVnhsy6/fRmaWshThqq8RHVLby+39RM0vCUWniX2ensopC4G/8FsLg1jVJHbCA24g1ErevRGOBJRF1suquK9BkS3nte6UjrFFSoSFiT2k4Xy7/i7AD/aeEFzj2zveWgLjbx5ZzaLTNWThkeSa1Cxh2CO8DrRH2YEWbbHyG673OzW62pCc5kPsphcXmjiRShBSgYvyM0g7QcZGExxgs/UFnlRDihBh6c/AoDjOVYTku4P677kSVawuUjlUROavGrYQRSaqd0JE07pG46hMHlYiV8LMj67ulcl",
+  "token_hash": "c3016cdbc6b6ee7e2956c7d6c3265e2000317a2369dca907a99aa31400028514",
+  "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-DF25B570?token=KfqH5dg1RzCK5QHEDQXipES7FEROOSZ5hRCzhwHo07k",
+  "qr_payload": {
+    "document_id": "HS-2026-DF25B570",
+    "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-DF25B570?token=KfqH5dg1RzCK5QHEDQXipES7FEROOSZ5hRCzhwHo07k",
+    "token": "KfqH5dg1RzCK5QHEDQXipES7FEROOSZ5hRCzhwHo07k"
+  },
+  "status": "issued",
+  "created_at": "2026-05-23T16:21:18.157Z",
+  "signed_at": "2026-05-23T16:21:18.157Z",
+  "signed_pdf_path": "C:\\Users\\hphun\\NT219\\DoAn\\Public-Administrative-Services-via-Citizen-Services-Portal\\backend\\storage\\documents\\HS-2026-DF25B570\\signed.pdf",
+  "file_hash": "a8cf0930c38647efb4cced489c8537c6fa0bd59e5e69116dbbacc420255ae943",
+  "signature": "OZRc8pVrgEdpjlO9xGMmvtnxc74EeNE7EXitZjkC1GO7u9SoO1T2rtRWaOGeiUo41NWXdAmKT3YIymKVlWw/gx8U6tBmWs58NN958kVvgaDlRpSIi2SLYFvRHBGUSpKRcrVyCSxCHc+evTeUodePRReIPZMPULGajIxHFVtlZNyfb1FGkKt/v3qJ2GwY1+IvcuRlexNjQPHxP47DGqbCdlTSkPc6jLsjGY66HdSCAU5o6b42AZhrCBuExDabT0qKrmi5pobgQ6tRFlvXIJsrkOTSt+KSMxhv3wbHJYlp00gs13c8Thl7R3nbRwpI4MFUfiVfNu/foKRctPFl1a0hNJXkmMYL8k5bfNiSbNtc+2g1Vbr/alsJmmGes3cXc/Gsn4NTl2CJH8qEwIaX3+Za2x6iq2ejYOiEM+Xr9bRxtDJ/j08l0Pl5RCyPsQhBlw9+qaLBTAqc1U59M+rVKq6jU2J0fDMEmNeUXW4Iz4mNr2zFGWxnRk59+KJpgqyim/7F406QOtQ89l8MfrI8zZJzGYai8b+7xSIzCJ0dXIpM0HolwvbFFltamIdROW8e6RnQL20RyNwrLxopHsy4Wr+qJ86CNAMy7cffepUlpZ8wjmpWRzXacX9Z3ykRd2fUFana98jZovfIL/6/6rLHIQ+YNdYJ/roTkWF4ano/E2RWNmTR83vvd5k0nvSbgieNmdeei1rF2O44LI9Htp2zS4uv98LeK1UPAp2DZL1bD95wt2YRTLmeO/Hh33XxTDpUjCxkjXQeTEwU8EzjTECk4n2UJEtobzUePM+W1VBSXEsFRGjRiUtBW5Ck0oxG68xqbwlDzIEs/+u2U9OuxYTkk8RYacHhfJssb9f7Oqi1EUlz6w==",
+  "signature_payload": "{\"document_id\":\"HS-2026-DF25B570\",\"file_hash\":\"a8cf0930c38647efb4cced489c8537c6fa0bd59e5e69116dbbacc420255ae943\",\"issued_at\":\"2026-05-23T16:21:18.157Z\",\"key_id\":\"falcon-development-key-02597ccf\",\"version\":\"1.0\"}"
+}

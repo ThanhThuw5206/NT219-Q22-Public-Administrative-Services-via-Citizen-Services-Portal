@@ -1,0 +1,25 @@
+{
+  "document_id": "HS-2026-0FF99E6A",
+  "owner_id": "demo-citizen",
+  "original_name": "TLTH3.pdf",
+  "file_path": "src\\storage\\HS-2026-0FF99E6A\\original.pdf",
+  "original_file_hash": "2d238efe0f295dbbd2175190f0e22658d60aee9f7344938c2b26c0c6f3ca43de",
+  "algorithm": "FALCON-512",
+  "signature_provider": "demo-ed25519-adapter",
+  "public_key_id": "falcon-demo-key-001",
+  "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEARWUa8WUcT/xOtEw0XBIUiyCMX08ebX+UBwdXoNJ6yD0=\n-----END PUBLIC KEY-----\n",
+  "token_hash": "640f99433d9e68be1962c5907685942afe6f1f1f89ff0af9b952f0f677f8282d",
+  "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-0FF99E6A?token=CBlex0NxHAFigsh4TV5g4hz1gBCaXgu1wBgYyLEM5nU",
+  "qr_payload": {
+    "document_id": "HS-2026-0FF99E6A",
+    "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-0FF99E6A?token=CBlex0NxHAFigsh4TV5g4hz1gBCaXgu1wBgYyLEM5nU",
+    "token": "CBlex0NxHAFigsh4TV5g4hz1gBCaXgu1wBgYyLEM5nU"
+  },
+  "status": "issued",
+  "created_at": "2026-05-17T16:23:08.763Z",
+  "signed_at": "2026-05-17T16:23:08.763Z",
+  "signed_file_path": "src\\storage\\HS-2026-0FF99E6A\\signed.pdf",
+  "file_hash": "1edf4f832a0d1956ba71c9dad09d49b35e12b2ef7013ef01d3ea9ae50f7a6609",
+  "signature": "4/e6alMCsI9GyvCQw1hh+k+/66VSFko06azlsfZqCSyRE6zSotJLAhDABGRYu4OuEE8kn++ATrzL8lzAZTRKCw==",
+  "signature_payload": "{\"document_id\":\"HS-2026-0FF99E6A\",\"file_hash\":\"1edf4f832a0d1956ba71c9dad09d49b35e12b2ef7013ef01d3ea9ae50f7a6609\",\"issued_at\":\"2026-05-17T16:23:08.763Z\",\"key_id\":\"falcon-demo-key-001\",\"version\":1}"
+}
