@@ -15,15 +15,22 @@ export const getNetworkModel = (req, res) => {
     });
 };
 
-export const getCryptoPublicKey = (req, res) => {
-    const activeKey = getActiveKey();
+export const getCryptoPublicKey = async (req, res) => {
+    try {
+        const activeKey = await getActiveKey();
 
-    res.json({
-        key_id: activeKey.key_id,
-        algorithm: activeKey.algorithm,
-        provider: activeKey.provider,
-        status: activeKey.status,
-        public_key: activeKey.public_key,
-        created_at: activeKey.created_at
-    });
+        res.json({
+            key_id: activeKey.key_id,
+            algorithm: activeKey.algorithm,
+            provider: activeKey.provider,
+            status: activeKey.status,
+            public_key: activeKey.public_key,
+            created_at: activeKey.created_at
+        });
+    } catch (error) {
+        res.status(500).json({
+            message: "Failed to load active signing key",
+            reason: error.message
+        });
+    }
 };

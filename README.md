@@ -1,8 +1,56 @@
 # NT219-Q22 Public Administrative Services Portal
 
-Backend demo cho luong xac thuc tai lieu PDF bang SHA-256, chu ky so theo adapter Falcon, QR payload, token xac minh va mo hinh mang 4 zone.
+## Luồng xử lý mong muốn
 
-## Chay backend
+```text
+Citizen nhập form
+    ↓
+Frontend validate
+    ↓
+POST /preview
+    ↓
+Backend:
+    - map dữ liệu vào PDF template CT01
+    - render PDF preview
+    - lưu preview tạm
+    - trả preview_url + preview_id
+    ↓
+Citizen xem preview
+    ↓
+Citizen bấm xác nhận
+    ↓
+POST /issue
+    ↓
+Backend:
+    - lấy preview data
+    - generate document_id
+    - generate token chống giả mạo
+    - generate QR chứa verify URL
+    - embed QR vào PDF
+    - SHA256 PDF
+    - Falcon sign hash
+    - embed signature metadata
+    - lưu DB
+        ↓
+Trả:
+{
+  "signed_pdf_url": "...",
+  "verify_url": "...",
+  "signature": "..."
+}
+```
+
+---
+
+# Cài package
+
+```bash
+npm install qrcode fs-extra
+```
+
+---
+
+# Chạy backend
 
 ```bash
 cd backend
@@ -10,104 +58,307 @@ npm install
 npm run dev
 ```
 
-Server mac dinh: `http://localhost:3000`
+Server mặc định:
 
-## Mo hinh mang
+```text
+http://localhost:3000
+```
 
-Tai lieu chi tiet: [docs/network-model.md](docs/network-model.md)
+---
 
-Backend da tach route theo 4 vung:
+# Thêm API preview và issue
 
-| Zone | Route / module |
-| --- | --- |
-| Public Zone | `/api/public/*` |
-| Application Zone | `/api/app/documents/*` |
-| Crypto Zone | `/api/internal/crypto/*`, `backend/src/crypto/*` |
-| Data Zone | `backend/src/data`, `backend/src/uploads`, `document.repository.js` |
+## 1. Preview PDF
 
-Route cu `/api/documents/*` van duoc giu de tuong thich, nhung route dung theo mo hinh la `/api/app/documents/*`.
+### Endpoint
 
-## Luong ky so Falcon
+```http
+POST http://localhost:3000/api/documents/preview
+```
 
-Khi upload PDF, backend se:
+### Request body
 
-1. Tao `document_id`.
-2. Tao token xac minh ngau nhien cho QR.
-3. Tao ban PDF cuoi cung co QR va thong tin xac minh o trang cuoi.
-4. Tinh SHA-256 tren chinh ban PDF cuoi cung.
-5. Tao payload ky gom `document_id`, `file_hash`, `issued_at`, `key_id`, `version`.
-6. Ky payload qua `backend/src/crypto/signature.service.js`.
-7. Luu metadata gom hash file cuoi cung, signature, public key, token hash va audit log.
+```json
+{
+  "full_name": "Nguyen Van A",
+  "citizen_id": "0123456789",
+  "temporary_address": "HCM City"
+}
+```
 
-Luu y: repo hien chua co thu vien Falcon native. `backend/src/crypto/signature.service.js` da setup interface voi `algorithm: FALCON-512`, nhung provider demo dang dung Ed25519 cua Node.js va ghi ro `signature_provider: demo-ed25519-adapter` de he thong chay duoc. Khi co thu vien Falcon/HSM, chi can thay ham `signPayload` va `verifyPayloadSignature`, cac API nghiep vu khong doi.
+### Response
 
-## API chinh
+```json
+{
+  "message": "Preview generated",
+  "data": {
+    "preview_id": "ba88f40e-d9d9-4e5d-a7ca-2803c0a988c5",
+    "preview_url": "/storage/preview/ba88f40e-d9d9-4e5d-a7ca-2803c0a988c5.pdf"
+  }
+}
+```
 
-### Upload va ky PDF
+---
 
-`POST /api/app/documents/upload`
+## 2. Issue tài liệu và ký số
 
-Body `form-data`:
+### Endpoint
 
-- `file`: PDF
-- `owner_id`: optional
+```http
+POST http://localhost:3000/api/documents/issue
+```
 
-Ket qua tra ve:
+### Request body
+
+```json
+{
+  "filePath": "C:/Users/hphun/NT219/DoAn/Public-Administrative-Services-via-Citizen-Services-Portal/backend/src/uploads/1778621489474-NT106-24521418-24521260-BT8.pdf",
+  "originalName": "tamtru.pdf",
+  "owner_id": "citizen-001"
+}
+```
+
+### Response
+
+```json
+{{
+    "message": "Document issued successfully",
+    "documentInfo": {
+        "document_id": "HS-2026-64934452",
+        "file_hash": "f179875ab760ef0d175a4ff4199521cb814e8cb266ae4ecb68adaac539800a70",
+        "hash": "f179875ab760ef0d175a4ff4199521cb814e8cb266ae4ecb68adaac539800a70",
+        "signature": "Ej4FomyLHHpLwRVrYSreGY55Dyt3ksPnnfisvgeaBqDZLywdgVXQeorKY2F8xs3GV9iiWT9YgHcXy6y0/ymwBw==",
+        "algorithm": "FALCON-512",
+        "signature_provider": "demo-ed25519-adapter",
+        "public_key_id": "falcon-demo-key-001",
+        "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-64934452?token=M5DWJCk36GBchuem8wXMW3DIsywsTqijlAAPbychHXc",
+        "qr_payload": {
+            "document_id": "HS-2026-64934452",
+            "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-64934452?token=M5DWJCk36GBchuem8wXMW3DIsywsTqijlAAPbychHXc",
+            "token": "M5DWJCk36GBchuem8wXMW3DIsywsTqijlAAPbychHXc"
+        },
+        "file_path": "src\\storage\\HS-2026-64934452\\signed.pdf",
+        "signed_file": "src\\storage\\HS-2026-64934452\\signed.pdf",
+        "original_file_hash": "ec32a3e5f1a3cbd87a41b0d95d1817e12541bf1f7cc6c57d9aa41c349db566cc",
+        "signed_pdf_url": "/api/app/documents/HS-2026-64934452/signed-pdf",
+        "status": "issued",
+        "signed_at": "2026-05-17T17:08:19.790Z"
+    }
+}
+```
+
+---
+
+# Storage lưu theo mã hồ sơ
+
+```text
+storage/
+└── documents/
+    └── HS-2026-XXXXX/
+        ├── original.pdf
+        ├── signed.pdf
+        ├── qr.png
+        └── metadata.json
+```
+
+---
+
+# API chính
+
+---
+
+## 1. Upload và ký PDF
+
+### Endpoint
+
+```http
+POST /api/app/documents/upload
+```
+
+### Body form-data
+
+| Field      | Type | Required | Description |
+|------------|------|-----------|-------------|
+| file       | PDF  | Yes       | File PDF cần ký |
+| owner_id   | Text | No        | ID người sở hữu |
+
+### Response
+
+```json
+{
+  "document_id": "HS-2026-00001",
+  "file_hash": "SHA256_HASH",
+  "signature": "FALCON_SIGNATURE",
+  "algorithm": "Falcon-512",
+  "public_key_id": "falcon-public-key-01",
+  "original_file_hash": "ORIGINAL_FILE_HASH",
+  "signed_pdf_url": "/storage/documents/HS-2026-00001/signed.pdf",
+  "qr_payload": {
+    "document_id": "HS-2026-00001",
+    "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-00001?token=abcxyz",
+    "token": "abcxyz"
+  }
+}
+```
+
+---
+
+## 2. Tải PDF đã ký
+
+### Endpoint
+
+```http
+GET /api/app/documents/:documentId/signed-pdf
+```
+
+### Mô tả
+
+Endpoint này trả về bản PDF đã được:
+
+- Đóng khung thông tin ký số
+- Nhúng QR xác minh
+- Gắn payload xác thực
+
+QR chứa:
 
 - `document_id`
-- `file_hash`
-- `signature`
-- `algorithm`
-- `public_key_id`
-- `original_file_hash`
-- `signed_pdf_url`
-- `qr_payload` gom `document_id`, `verify_url`, `token`
+- `verify_url`
+- `token`
 
-### Tai PDF da ky
+Cách làm này được tham khảo từ source WinForms Falcon:
 
-`GET /api/app/documents/:documentId/signed-pdf`
+- Sau khi ký payload
+- Hệ thống gắn chữ ký và QR vào PDF
+- Người dùng có thể tải và chia sẻ file đã ký
 
-Endpoint nay tra ve ban PDF da duoc dong khung thong tin ky so va QR xac minh. QR chua payload gom `document_id`, `verify_url` va token. Cach lam nay duoc tham khao tu source WinForms Falcon: sau khi ky payload, he thong gan chu ky/QR vao PDF de nguoi dung co the luu va chia se file da ky.
+---
 
-### Xac minh bang QR/token
+## 3. Xác minh bằng QR/token
 
-`GET /api/public/documents/verify/:documentId?token=...`
+### Endpoint
 
-Endpoint nay kiem tra token va chu ky tren ban ghi da phat hanh.
+```http
+GET /api/public/documents/verify/:documentId?token=...
+```
 
-### Xac minh bang upload PDF
+### Mô tả
 
-`POST /api/public/documents/verify/:documentId`
+Endpoint này:
 
-Body `form-data`:
+- Kiểm tra token
+- Kiểm tra chữ ký số
+- Kiểm tra trạng thái phát hành hồ sơ
 
-- `file`: PDF can kiem tra
-- `token`: token trong QR payload
+---
 
-Endpoint nay tinh lai SHA-256 cua PDF upload. Theo brief, file hop le la ban PDF cuoi cung da duoc nhung QR, vi chu ky duoc tao sau buoc nhung QR.
+## 4. Xác minh bằng upload PDF
 
-- `valid`
-- `hash_matched`
-- `signature_valid`
-- `reason`
+### Endpoint
 
-### Xem public key cua Crypto Zone
+```http
+POST /api/public/documents/verify/:documentId
+```
 
-`GET /api/internal/crypto/public-key`
+### Body form-data
 
-Header bat buoc:
+| Field | Type | Required | Description |
+|-------|------|-----------|-------------|
+| file  | PDF  | Yes       | PDF cần xác minh |
+| token | Text | Yes       | Token lấy từ QR |
 
-- `x-internal-crypto-secret: change-this-crypto-zone-secret`
+---
 
-Trong production, doi gia tri nay bang bien moi truong `INTERNAL_CRYPTO_SECRET`.
+# Cấu trúc project hiện tại
 
-## File runtime
+```text
+src/
+│
+├── controllers/
+│   └── document.controller.js
+│
+├── routes/
+│   └── document.route.js
+│
+├── services/
+│   ├── document.service1.js
+│   │      ← orchestrator chính được tạo mới
+│   │         thay vì sửa file cũ
+│   │
+│   ├── qr.service.js
+│   ├── pdf.service.js
+│   ├── signed-pdf.service.js
+│   ├── audit.service.js
+│   ├── preview.service.js
+│   └── document.repository.js
+│
+├── crypto/
+│   ├── hash.service.js
+│   ├── signature.service.js
+│   └── falcon.service.js
+│
+├── utils/
+│   └── storage.util.js
+│
+├── uploads/
+│
+└── storage/
+    └── documents/
+        └── HS-2026-XXXXX/
+            ├── original.pdf
+            ├── signed.pdf
+            ├── qr.png
+            └── metadata.json
+```
 
-Backend tao cac file runtime sau va da duoc dua vao `.gitignore`:
+---
 
-- `backend/src/uploads/`
-- `backend/src/signed/`
-- `backend/src/data/documents.json`
-- `backend/src/crypto/keys/falcon-demo-keypair.json`
+# Flow xử lý issue document
 
-Trong ban production, private key Falcon phai nam trong Key Vault/HSM, khong luu trong source code hoac database.
+```text
+Upload PDF
+    ↓
+Tạo document_id
+    ↓
+Tạo token xác minh
+    ↓
+Generate QR
+    ↓
+Hash SHA256 file
+    ↓
+Falcon Sign hash
+    ↓
+Embed QR vào PDF
+    ↓
+Lưu storage
+    ↓
+Lưu DB
+    ↓
+Trả signed PDF + verify URL
+```
+
+---
+
+# Thành phần bảo mật
+
+| Thành phần | Chức năng |
+|------------|------------|
+| SHA256 | Tạo hash tài liệu |
+| Falcon-512 | Ký số hậu lượng tử |
+| QR Verify | Xác minh nhanh |
+| Token Verify | Chống giả mạo |
+| Signed PDF | PDF có nhúng QR và chữ ký |
+
+---
+
+# Kết quả mong muốn
+
+Hệ thống hỗ trợ:
+
+- Upload PDF
+- Preview hồ sơ
+- Ký số Falcon
+- Nhúng QR verify
+- Xác minh tài liệu
+- Trả PDF đã ký
+- Lưu metadata hồ sơ
+- Quản lý storage theo mã hồ sơ

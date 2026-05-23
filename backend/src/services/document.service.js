@@ -60,7 +60,7 @@ export const processDocument = async (input) => {
         documentRecord
     });
 
-    documentRecord.signed_file_path = signedFilePath;
+    documentRecord.signed_pdf_path = signedFilePath;
     documentRecord.file_hash = sha256File(signedFilePath);
 
     const payload = buildSignaturePayload({
@@ -102,8 +102,8 @@ export const processDocument = async (input) => {
         public_key_id: savedDocument.public_key_id,
         verify_url: savedDocument.verify_url,
         qr_payload: savedDocument.qr_payload,
-        file_path: savedDocument.signed_file_path,
-        signed_file: savedDocument.signed_file_path,
+        file_path: savedDocument.signed_pdf_path,
+        signed_file: savedDocument.signed_pdf_path,
         original_file_hash: savedDocument.original_file_hash,
         signed_pdf_url: `/api/app/documents/${savedDocument.document_id}/signed-pdf`,
         status: savedDocument.status,
@@ -196,13 +196,13 @@ export const getDocument = (documentId) => {
         original_name: document.original_name,
         file_hash: document.file_hash,
         hash: document.file_hash,
-        file_path: document.signed_file_path || document.file_path,
+        file_path: document.signed_pdf_path || document.file_path,
         original_file_hash: document.original_file_hash || null,
         algorithm: document.algorithm,
         signature_provider: document.signature_provider,
         public_key_id: document.public_key_id,
         verify_url: document.verify_url,
-        signed_pdf_url: document.signed_file_path ? `/api/app/documents/${document.document_id}/signed-pdf` : null,
+        signed_pdf_url: document.signed_pdf_path ? `/api/app/documents/${document.document_id}/signed-pdf` : null,
         status: document.status,
         created_at: document.created_at,
         signed_at: document.signed_at
@@ -216,12 +216,12 @@ export const getDocuments = () => {
 export const getSignedDocumentFile = (documentId) => {
     const document = findDocumentById(documentId);
 
-    if (!document || !document.signed_file_path) {
+    if (!document || !document.signed_pdf_path) {
         return null;
     }
 
     return {
-        filePath: document.signed_file_path,
+        filePath: document.signed_pdf_path,
         fileName: `${document.document_id}-signed.pdf`
     };
 };

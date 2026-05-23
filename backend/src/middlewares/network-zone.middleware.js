@@ -1,4 +1,5 @@
 import { INTERNAL_CRYPTO_SECRET } from "../config/network.config.js";
+import * as auditService from "../services/audit.service.js";
 
 export const attachNetworkZone = (zone) => {
     return (req, res, next) => {
@@ -12,7 +13,31 @@ export const requireCryptoZoneAccess = (req, res, next) => {
     const providedSecret = req.header("x-internal-crypto-secret");
 
     if (providedSecret !== INTERNAL_CRYPTO_SECRET) {
-        return res.status(403).json({
+        // Audit log the denied access attempt (defensive — never crash on audit failure)
+        try {
+            if (typeof auditService.logKeyAccess === "function") {
+                auditService.logKeyAccess({
+                    keyId: null,
+                    actor: req.ip,
+                    ipAddress: req.ip,
+                    accessType: "crypto_zone_access",
+                    result: "denied",
+                });
+            } else if (typeof auditService.writeAuditLog === "function") {
+                auditService.writeAuditLog({
+                    action: "key_access",
+                    documentId: null,
+                    result: "denied",
+                    actor: req.ip || "anonymous",
+                    ipAddress: req.ip,
+                    details: { reason: "MISSING_OR_INVALID_INTERNAL_SECRET" },
+                });
+            }
+        } catch (_err) {
+            // Audit MUST NOT block the rejection response. Intentionally swallow.
+        }
+
+        return res.status(401).json({
             message: "Crypto Zone access denied",
             reason: "MISSING_OR_INVALID_INTERNAL_SECRET"
         });
