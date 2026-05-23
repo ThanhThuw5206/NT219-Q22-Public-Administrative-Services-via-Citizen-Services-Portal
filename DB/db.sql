@@ -65,9 +65,10 @@ CREATE TABLE keys (
     status ENUM('active', 'revoked', 'expired') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expired_at TIMESTAMP NULL
-    ALTER TABLE keys ADD COLUMN user_id INT NOT NULL AFTER key_id;
-    ALTER TABLE keys ADD FOREIGN KEY (user_id) REFERENCES users(id);
 );
+
+ALTER TABLE keys ADD COLUMN user_id INT NOT NULL AFTER key_id;
+ALTER TABLE keys ADD FOREIGN KEY (user_id) REFERENCES users(id);
 
 -- 6. DOCUMENTS
 -- Lưu thông tin tài liệu/hồ sơ
@@ -88,6 +89,9 @@ CREATE TABLE documents (
     -- trạng thái hồ sơ
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     signed_at TIMESTAMP NULL,
+    original_pdf_path TEXT,
+    signed_pdf_path TEXT,
+    preview_id VARCHAR(100),
     FOREIGN KEY (owner_id) REFERENCES users(id),
     FOREIGN KEY (public_key_id) REFERENCES keys(key_id)
 );
@@ -269,3 +273,96 @@ ON documents(token_hash);
 
 CREATE INDEX idx_verification_tokens_token_hash 
 ON verification_tokens(token_hash);
+
+---preview table
+CREATE TABLE document_previews (
+    preview_id VARCHAR(100) PRIMARY KEY,
+
+    owner_id INT NULL,
+
+    preview_path TEXT NOT NULL,
+
+    form_data JSON NOT NULL,
+
+    status ENUM(
+        'preview',
+        'issued',
+        'expired'
+    ) DEFAULT 'preview',
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    expired_at TIMESTAMP NULL
+);
+
+--- thêm cột cho document
+ALTER TABLE documents
+ADD COLUMN verify_url TEXT;
+
+ALTER TABLE documents
+ADD COLUMN qr_payload JSON;
+
+ALTER TABLE documents
+ADD COLUMN signature_payload JSON;
+
+ALTER TABLE documents
+ADD COLUMN algorithm VARCHAR(50);
+
+ALTER TABLE documents
+ADD COLUMN signature_provider VARCHAR(100);
+
+ALTER TABLE documents
+ADD COLUMN original_name VARCHAR(255);
+
+ALTER TABLE documents
+ADD COLUMN file_path TEXT;
+
+ALTER TABLE documents
+ADD COLUMN original_file_hash CHAR(64);
+
+ALTER TABLE documents
+MODIFY COLUMN preview_id VARCHAR(100);
+
+ALTER TABLE documents
+ADD CONSTRAINT fk_documents_preview
+FOREIGN KEY (preview_id)
+REFERENCES document_previews(preview_id);
+
+ALTER TABLE documents
+MODIFY COLUMN document_id VARCHAR(50);
+
+---thêm cột cho document_previews
+ALTER TABLE document_previews
+ADD COLUMN document_id VARCHAR(50) NULL AFTER preview_id;
+
+ALTER TABLE document_previews
+ADD COLUMN preview_url TEXT;
+
+ALTER TABLE document_previews
+ADD COLUMN document_folder TEXT;
+
+ALTER TABLE document_previews
+ADD COLUMN issued_at TIMESTAMP NULL;
+
+ALTER TABLE document_previews
+ADD COLUMN updated_at TIMESTAMP
+DEFAULT CURRENT_TIMESTAMP
+ON UPDATE CURRENT_TIMESTAMP;
+--- tạo index cho document_id
+CREATE INDEX idx_preview_document_id
+ON document_previews(document_id);
+
+CREATE INDEX idx_preview_status
+ON document_previews(status);
+--- sửa kiểu dữ liệu cho các bảng liên quan
+ALTER TABLE document_signatures
+MODIFY COLUMN document_id VARCHAR(50);
+
+ALTER TABLE verification_tokens
+MODIFY COLUMN document_id VARCHAR(50);
+
+ALTER TABLE audit_logs
+MODIFY COLUMN document_id VARCHAR(50);
+
+ALTER TABLE temp_residence_documents
+MODIFY COLUMN document_id VARCHAR(50);

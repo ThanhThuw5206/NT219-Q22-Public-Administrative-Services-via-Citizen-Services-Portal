@@ -2,7 +2,10 @@ import fs from "fs";
 import path from "path";
 import multer from "multer";
 import { fileURLToPath } from "url";
-import { createPreviewDocument } from "../services/preview.service.js";
+import {
+    createPreviewDocument,
+    getPreviewById
+} from "../services/preview.service.js";
 import {
     getDocument,
     getDocuments,
@@ -10,6 +13,10 @@ import {
     processDocument,
     verifyDocument
 } from "../services/document.service1.js";//dùng file mới 
+import {
+    validateCT01
+} from "../validators/ct01.validator.js";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,6 +53,7 @@ const upload = multer({ storage, fileFilter: pdfOnly });
 export const previewDocument = async (req, res) => {
 
     try {
+        validateCT01(req.body);
 
         const result = await createPreviewDocument(req.body);
 
@@ -68,12 +76,39 @@ export const issueDocument = async (req, res) => {
 
     try {
 
+        const preview = await getPreviewById(req.body.preview_id);
+
+        if (!preview) {
+            return res.status(404).json({
+                message: "Preview not found"
+            });
+        }
+      if (preview.expired_at && new Date(preview.expired_at) < new Date()) {
+
+        return res.status(400).json({
+            message: "Preview expired"
+        });
+
+    }
+
+       const parsedFormData =
+            typeof preview.form_data === "string"
+                ? JSON.parse(preview.form_data)
+                : preview.form_data;
+
         const result = await processDocument({
 
-            filePath: req.body.filePath,
-            originalName: req.body.originalName,
-            ownerId: req.body.owner_id || "demo-citizen",
-            ipAddress: req.ip
+            documentId: preview.document_id,
+
+            filePath: preview.preview_path,
+
+            originalName: "CT01.pdf",
+
+            ownerId: req.body.owner_id,
+
+            ipAddress: req.ip,
+
+            formData: parsedFormData
 
         });
 

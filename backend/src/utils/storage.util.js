@@ -1,7 +1,9 @@
 import fs from "fs";
 import path from "path";
 
-const STORAGE_ROOT = "src/storage";
+const STORAGE_ROOT = path.resolve(
+    "storage/documents"
+);
 
 export const ensureStorageFolders = () => {
 
