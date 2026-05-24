@@ -24,5 +24,3 @@ export const NETWORK_ZONES = {
         path_prefixes: ["backend/src/data", "backend/src/uploads"]
     }
 };
-
-export const INTERNAL_CRYPTO_SECRET = process.env.INTERNAL_CRYPTO_SECRET || "change-this-crypto-zone-secret";

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Công dân - Cổng Dịch vụ công</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="navbar">
+        <a href="/" class="logo">Cổng Dịch vụ công <span>Quốc gia</span></a>
+        <nav>
+            <a href="/">Dịch vụ công</a>
+            <a href="/verify.html">Xác minh</a>
+            <div id="navAuth"></div>
+        </nav>
+    </div>
+
+    <main class="container">
+        <h1 class="page-title">Hồ sơ của tôi</h1>
+        <p class="page-subtitle">Nộp hồ sơ đăng ký tạm trú, xem trước biểu mẫu và theo dõi kết quả xử lý.</p>
+
+        <div id="alertBox" class="alert" style="display:none"></div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="new">Nộp hồ sơ mới</div>
+            <div class="tab" data-tab="list">Hồ sơ đã nộp</div>
+        </div>
+
+        <div id="tab-new" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Đơn đăng ký tạm trú (CT01)</h2>
+                </div>
+                <form id="submitForm">
+                    <div class="form-group">
+                        <label>Kính gửi</label>
+                        <input type="text" name="office_name" value="Công an phường Linh Trung">
+                    </div>
+
+                    <h3 class="form-section-title">Thông tin cá nhân</h3>
+                    <div class="form-group">
+                        <label>Họ, chữ đệm và tên *</label>
+                        <input type="text" name="full_name" required>
+                    </div>
+                    <div class="form-row-3">
+                        <div class="form-group">
+                            <label>Ngày sinh</label>
+                            <input type="text" name="birth_day" placeholder="01">
+                        </div>
+                        <div class="form-group">
+                            <label>Tháng sinh</label>
+                            <input type="text" name="birth_month" placeholder="01">
+                        </div>
+                        <div class="form-group">
+                            <label>Năm sinh</label>
+                            <input type="text" name="birth_year" placeholder="2000">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Giới tính</label>
+                            <select name="gender">
+                                <option value="Nam">Nam</option>
+                                <option value="Nữ">Nữ</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Số CCCD *</label>
+                            <input type="text" name="citizen_id" required pattern="\d{12}" placeholder="12 chữ số">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Số điện thoại *</label>
+                            <input type="text" name="phone" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" name="email">
+                        </div>
+                    </div>
+
+                    <h3 class="form-section-title">Thông tin chủ hộ</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Họ tên chủ hộ</label>
+                            <input type="text" name="householder_name">
+                        </div>
+                        <div class="form-group">
+                            <label>Mối quan hệ</label>
+                            <input type="text" name="relationship" placeholder="người thuê">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>CCCD chủ hộ</label>
+                        <input type="text" name="householder_id" pattern="\d{12}" placeholder="12 chữ số">
+                    </div>
+
+                    <h3 class="form-section-title">Nội dung đề nghị</h3>
+                    <div class="form-group">
+                        <label>Nội dung *</label>
+                        <textarea name="request_content" required rows="3" placeholder="Đăng ký tạm trú phục vụ..."></textarea>
+                    </div>
+
+                    <div style="display:flex;gap:12px;flex-wrap:wrap">
+                        <button type="button" id="btnPreview" class="btn btn-outline btn-lg">Xem trước</button>
+                        <button type="submit" class="btn btn-primary btn-lg">Nộp hồ sơ</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="tab-list" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Danh sách hồ sơ</h2>
+                    <button onclick="loadMyDocs()" class="btn btn-sm btn-outline">Tải lại</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Mã hồ sơ</th>
+                                <th>Trạng thái</th>
+                                <th>Ngày tạo</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="docTableBody">
+                            <tr><td colspan="4" class="empty-state"><p>Đang tải...</p></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="previewModal" class="modal-overlay" style="display:none">
+        <div class="card">
+            <div class="card-header">
+                <h2>Xem trước hồ sơ</h2>
+                <button onclick="closePreview()" class="btn btn-sm btn-outline">Đóng</button>
+            </div>
+            <iframe id="previewFrame" style="width:100%;height:500px;border:1px solid var(--gray-200);border-radius:6px"></iframe>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script>
+        let currentPreviewId = null;
+
+        if (!requireAuth()) { /* redirect */ } else {
+            updateNav();
+
+            document.querySelectorAll(".tab").forEach(tab => {
+                tab.addEventListener("click", () => {
+                    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+                    document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+                    tab.classList.add("active");
+                    document.getElementById(`tab-${tab.dataset.tab}`).classList.add("active");
+                    if (tab.dataset.tab === "list") loadMyDocs();
+                });
+            });
+
+            document.getElementById("btnPreview").addEventListener("click", async () => {
+                const formData = getFormData();
+                try {
+                    const res = await apiPost("/app/documents/preview", formData);
+                    currentPreviewId = res.data.preview_id;
+                    document.getElementById("previewFrame").src = await apiBlobUrl(res.data.preview_url);
+                    document.getElementById("previewModal").style.display = "flex";
+                } catch (err) {
+                    showAlert(err.message, "error");
+                }
+            });
+
+            document.getElementById("submitForm").addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const formData = getFormData();
+                if (currentPreviewId) {
+                    formData.preview_id = currentPreviewId;
+                }
+                try {
+                    const res = await apiPost("/app/documents/submit", formData);
+                    showAlert(`Nộp hồ sơ thành công! Mã hồ sơ: ${res.data.document_id}`, "success");
+                    document.getElementById("submitForm").reset();
+                    currentPreviewId = null;
+                } catch (err) {
+                    showAlert(err.message, "error");
+                }
+            });
+
+            document.getElementById("submitForm").addEventListener("input", () => {
+                currentPreviewId = null;
+            });
+
+            loadMyDocs();
+        }
+
+        function getFormData() {
+            const f = document.getElementById("submitForm");
+            return {
+                full_name: f.full_name.value.trim(),
+                citizen_id: f.citizen_id.value.trim(),
+                phone: f.phone.value.trim(),
+                request_content: f.request_content.value.trim(),
+                office_name: f.office_name.value.trim(),
+                birth_day: f.birth_day.value.trim(),
+                birth_month: f.birth_month.value.trim(),
+                birth_year: f.birth_year.value.trim(),
+                gender: f.gender.value,
+                email: f.email.value.trim(),
+                householder_name: f.householder_name.value.trim(),
+                householder_id: f.householder_id.value.trim(),
+                relationship: f.relationship.value.trim()
+            };
+        }
+
+        async function loadMyDocs() {
+            try {
+                const all = await apiGet("/app/documents/");
+                const tbody = document.getElementById("docTableBody");
+                if (!all || all.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state"><p>Chưa có hồ sơ nào</p></td></tr>';
+                    return;
+                }
+                tbody.innerHTML = all.map(doc => `
+                    <tr>
+                        <td><strong>${doc.document_id}</strong></td>
+                        <td><span class="badge badge-${doc.status}">${doc.status === "issued" ? "Đã ký" : doc.status === "submitted" ? "Chờ duyệt" : doc.status}</span></td>
+                        <td>${new Date(doc.created_at).toLocaleString("vi-VN")}</td>
+                        <td>
+                            ${doc.status === "issued" ? `<button onclick="downloadDocument('${doc.document_id}')" class="btn btn-sm btn-primary">Tải PDF</button>` : ""}
+                            <a href="/verify.html?token=" class="btn btn-sm btn-outline" onclick="event.preventDefault();alert('Token: ${doc.verify_url ? new URL(doc.verify_url).searchParams.get('token') || 'N/A' : 'N/A'}')">Xem token</a>
+                        </td>
+                    </tr>
+                `).join("");
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function closePreview() {
+            document.getElementById("previewModal").style.display = "none";
+        }
+
+        async function downloadDocument(docId) {
+            try {
+                await apiDownload(`/app/documents/${docId}/signed-pdf`, `${docId}-signed.pdf`);
+            } catch (err) {
+                showAlert(err.message, "error");
+            }
+        }
+
+        function showAlert(msg, type) {
+            const el = document.getElementById("alertBox");
+            el.className = `alert alert-${type}`;
+            el.textContent = msg;
+            el.style.display = "block";
+            setTimeout(() => el.style.display = "none", 5000);
+        }
+    </script>
+</body>
+</html>

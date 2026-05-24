@@ -8,17 +8,22 @@ import {
     requireCryptoZoneAccess,
 } from "./middlewares/network-zone.middleware.js";
 
+import authRoutes from "./routes/auth.routes.js";
 import cryptoRoutes from "./routes/crypto.routes.js";
 import documentRoutes from "./routes/document.routes.js";
 import publicRoutes from "./routes/public.routes.js";
-//thêm mới so vs bản cũ
 import { ensureStorageFolders } from "./utils/storage.util.js";
+import { seedDefaultUsers } from "./services/auth.service.js";
 
 ensureStorageFolders();
+await seedDefaultUsers();
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// Routes
+// Auth
+app.use("/api/auth", authRoutes);
+
+// API Routes
 app.use("/api/public",
     attachNetworkZone(NETWORK_ZONES.PUBLIC),
     publicRoutes
@@ -36,11 +41,10 @@ app.use(
     cryptoRoutes
 );
 
+// Static frontend files. Document storage is intentionally not exposed
+// directly; PDFs are served through authenticated/token-checked controllers.
+app.use(express.static(path.resolve("../frontend")));
+
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
-
-app.use(
-    "/storage",
-    express.static(path.resolve("storage"))
-);

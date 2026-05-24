@@ -10,9 +10,14 @@ import {
     getDocument,
     getDocuments,
     getSignedDocumentFile,
+    getDocumentFile,
+    getDocumentsByStatus,
+    getDocumentsByOwner,
     processDocument,
+    submitDocument,
+    signDocument,
     verifyDocument
-} from "../services/document.service1.js";//dùng file mới 
+} from "../services/document.service1.js"; 
 import {
     validateCT01
 } from "../validators/ct01.validator.js";
@@ -49,13 +54,27 @@ const pdfOnly = (req, file, cb) => {
 };
 
 const upload = multer({ storage, fileFilter: pdfOnly });
+
+const canManageAllDocuments = (user) => {
+    const roles = user?.roles || [];
+    return roles.includes("officer") || roles.includes("admin");
+};
+
+const canAccessDocument = (user, document) => {
+    if (!user || !document) return false;
+    if (canManageAllDocuments(user)) return true;
+    return String(document.owner_id) === String(user.id);
+};
   //mới thêm(nếu thấy r có thể xóa  cmt)
 export const previewDocument = async (req, res) => {
 
     try {
         validateCT01(req.body);
 
-        const result = await createPreviewDocument(req.body);
+        const result = await createPreviewDocument({
+            ...req.body,
+            owner_id: req.user?.id ? String(req.user.id) : null
+        });
 
         res.status(200).json({
             message: "Preview generated",
@@ -104,7 +123,7 @@ export const issueDocument = async (req, res) => {
 
             originalName: "CT01.pdf",
 
-            ownerId: req.body.owner_id,
+            ownerId: preview.owner_id || (req.user?.id ? String(req.user.id) : "officer"),
 
             ipAddress: req.ip,
 
@@ -144,7 +163,7 @@ export const uploadDocument = (req, res) => {
              const result = await processDocument({
                  filePath: req.file.path,
                  originalName: req.file.originalname,
-                 ownerId: req.body.owner_id || "demo-citizen",
+                 ownerId: req.user?.id ? String(req.user.id) : "demo-citizen",
                  ipAddress: req.ip
              });
 
@@ -214,14 +233,44 @@ export const getDocumentDetail = (req, res) => {
         return res.status(404).json({ message: "Document not found" });
     }
 
+    if (!canAccessDocument(req.user, document)) {
+        return res.status(403).json({ message: "You do not have access to this document" });
+    }
+
     res.json(document);
 };
 
 export const listDocumentDetails = (req, res) => {
-    res.json(getDocuments());
+    if (canManageAllDocuments(req.user)) {
+        return res.json(getDocuments());
+    }
+
+    res.json(getDocumentsByOwner(req.user.id));
 };
 
-export const downloadSignedDocument = (req, res) => {
+export const downloadSignedDocument = async (req, res) => {
+    const document = getDocument(req.params.documentId);
+
+    if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+    }
+
+    const providedToken = req.query.token;
+    const tokenAllowed = typeof providedToken === "string"
+        ? (await verifyDocument({
+            documentId: req.params.documentId,
+            token: providedToken,
+            actor: "signed-pdf-download",
+            ipAddress: req.ip
+        })).valid
+        : false;
+
+    if (!tokenAllowed && !canAccessDocument(req.user, document)) {
+        return res.status(req.user ? 403 : 401).json({
+            message: "A valid login session or verification token is required"
+        });
+    }
+
     const signedFile = getSignedDocumentFile(req.params.documentId);
 
     if (!signedFile || !fs.existsSync(signedFile.filePath)) {
@@ -229,4 +278,126 @@ export const downloadSignedDocument = (req, res) => {
     }
 
     res.download(signedFile.filePath, signedFile.fileName);
+};
+
+export const downloadPreviewDocument = async (req, res) => {
+    const preview = await getPreviewById(req.params.previewId);
+
+    if (!preview) {
+        return res.status(404).json({ message: "Preview not found" });
+    }
+
+    const previewOwnerId = preview.owner_id ? String(preview.owner_id) : null;
+    const isOwner = previewOwnerId && String(req.user?.id) === previewOwnerId;
+
+    if (!isOwner && !canManageAllDocuments(req.user)) {
+        return res.status(403).json({ message: "You do not have access to this preview" });
+    }
+
+    if (!preview.preview_path || !fs.existsSync(preview.preview_path)) {
+        return res.status(404).json({ message: "Preview file not found" });
+    }
+
+    res.sendFile(path.resolve(preview.preview_path));
+};
+
+// ---------------------------------------------------------------------------
+// New: Citizen-Officer workflow
+// ---------------------------------------------------------------------------
+
+export const submitDocumentHandler = async (req, res) => {
+    try {
+        validateCT01(req.body);
+
+        let preview;
+        if (req.body.preview_id) {
+            preview = await getPreviewById(req.body.preview_id);
+            if (!preview) {
+                return res.status(404).json({ message: "Preview not found" });
+            }
+
+            if (preview.expired_at && new Date(preview.expired_at) < new Date()) {
+                return res.status(400).json({ message: "Preview expired" });
+            }
+
+            const previewOwnerId = preview.owner_id ? String(preview.owner_id) : null;
+            if (previewOwnerId && previewOwnerId !== String(req.user.id)) {
+                return res.status(403).json({ message: "You do not have access to this preview" });
+            }
+
+            if (!preview.preview_path || !fs.existsSync(preview.preview_path)) {
+                return res.status(400).json({ message: "Preview file not found or already submitted" });
+            }
+        } else {
+            preview = await createPreviewDocument({
+                ...req.body,
+                owner_id: req.user?.id ? String(req.user.id) : null
+            });
+        }
+
+        const result = await submitDocument({
+            documentId: preview.document_id,
+            filePath: preview.file_path,
+            originalName: "CT01.pdf",
+            ownerId: req.user?.id ? String(req.user.id) : "citizen",
+            ipAddress: req.ip
+        });
+
+        res.status(201).json({
+            message: "Document submitted for review",
+            data: {
+                document_id: result.document_id,
+                status: result.status,
+                preview_url: preview.preview_url
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const signDocumentHandler = async (req, res) => {
+    try {
+        const result = await signDocument({
+            documentId: req.params.documentId,
+            officerId: req.user?.full_name || "officer",
+            ipAddress: req.ip
+        });
+
+        res.status(201).json({
+            message: "Document signed and issued successfully",
+            documentInfo: result
+        });
+    } catch (error) {
+        const status = error.message.includes("not found") ? 404 : 400;
+        res.status(status).json({ message: error.message });
+    }
+};
+
+export const listPendingDocuments = (req, res) => {
+    res.json(getDocumentsByStatus("submitted"));
+};
+
+export const listIssuedDocuments = (req, res) => {
+    res.json(getDocumentsByStatus("issued"));
+};
+
+export const downloadDocumentFile = (req, res) => {
+    const document = getDocument(req.params.documentId);
+
+    if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+    }
+
+    if (!canAccessDocument(req.user, document)) {
+        return res.status(403).json({ message: "You do not have access to this document" });
+    }
+
+    const file = getDocumentFile(req.params.documentId);
+
+    if (!file || !fs.existsSync(file.filePath)) {
+        return res.status(404).json({ message: "Document file not found" });
+    }
+
+    res.download(file.filePath, file.fileName);
 };

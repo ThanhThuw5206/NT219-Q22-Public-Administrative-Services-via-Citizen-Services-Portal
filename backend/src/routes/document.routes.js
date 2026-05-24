@@ -3,28 +3,48 @@ import express from "express";
 
 import {
     downloadSignedDocument,
+    downloadDocumentFile,
     getDocumentDetail,
     listDocumentDetails,
+    listPendingDocuments,
+    listIssuedDocuments,
     uploadDocument,
     verifyDocumentByQr,
     verifyDocumentByUpload,
-    //mới thêm
     previewDocument,
-    issueDocument
-
+    downloadPreviewDocument,
+    issueDocument,
+    submitDocumentHandler,
+    signDocumentHandler
 } from "../controllers/document.controller.js";
+
+import { authenticate, optionalAuthenticate } from "../middlewares/auth.middleware.js";
+import { requireRole } from "../middlewares/role.middleware.js";
 
 const router = express.Router();
 
-router.get("/", listDocumentDetails);
-  //mới thêm
-router.post("/preview", previewDocument);
-router.post("/issue", issueDocument);
-
-router.post("/upload", uploadDocument);
+// Public verification/download endpoints. Keep these before dynamic detail routes.
 router.get("/verify/:documentId", verifyDocumentByQr);
 router.post("/verify/:documentId", verifyDocumentByUpload);
-router.get("/:documentId/signed-pdf", downloadSignedDocument);
-router.get("/:documentId", getDocumentDetail);
+router.get("/:documentId/signed-pdf", optionalAuthenticate, downloadSignedDocument);
+
+// Citizen (authenticated)
+router.get("/", authenticate, listDocumentDetails);
+router.post("/preview", authenticate, previewDocument);
+router.get("/previews/:previewId/file", authenticate, downloadPreviewDocument);
+router.post("/submit", authenticate, submitDocumentHandler);
+router.get("/:documentId/download", authenticate, downloadDocumentFile);
+
+// Officer/Admin (authenticated + role)
+router.get("/pending", authenticate, requireRole("officer", "admin"), listPendingDocuments);
+router.get("/issued", authenticate, requireRole("officer", "admin"), listIssuedDocuments);
+router.post("/upload", authenticate, requireRole("officer", "admin"), uploadDocument);
+router.post("/:documentId/sign", authenticate, requireRole("officer", "admin"), signDocumentHandler);
+
+// Authenticated detail route must stay after fixed routes such as /pending.
+router.get("/:documentId", authenticate, getDocumentDetail);
+
+// Legacy
+router.post("/issue", authenticate, requireRole("officer", "admin"), issueDocument);
 
 export default router;

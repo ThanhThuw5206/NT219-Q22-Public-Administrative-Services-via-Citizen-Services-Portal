@@ -2,7 +2,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import { sha256File, sha256Text } from "../crypto/hash.service.js";
-import { saveDocument, findDocumentById, listDocuments } from "./document.repository.js";
+import { saveDocument, updateDocument, findDocumentById, listDocuments } from "./document.repository.js";
 import { buildSignaturePayload, getActiveKey, signPayload, verifyPayloadSignature } from "../crypto/signature.service.js";
 import { writeAuditLog } from "./audit.service.js";
 //thêm mới so vs bản cũ
@@ -276,6 +276,12 @@ export const getDocuments = () => {
     return listDocuments().map((document) => getDocument(document.document_id));
 };
 
+export const getDocumentsByOwner = (ownerId) => {
+    return listDocuments()
+        .filter((document) => String(document.owner_id) === String(ownerId))
+        .map((document) => getDocument(document.document_id));
+};
+
 export const getSignedDocumentFile = (documentId) => {
     const document = findDocumentById(documentId);
 
@@ -286,5 +292,189 @@ export const getSignedDocumentFile = (documentId) => {
     return {
         filePath: document.signed_pdf_path,
         fileName: `${document.document_id}-signed.pdf`
+    };
+};
+
+// ---------------------------------------------------------------------------
+// New: Citizen-Officer workflow
+// ---------------------------------------------------------------------------
+
+export const submitDocument = async ({ documentId, filePath, originalName, ownerId = "citizen", ipAddress = null }) => {
+    const folder = createDocumentFolder(documentId);
+    const originalPdfPath = path.join(folder, "original.pdf");
+
+    await fsExtra.move(filePath, originalPdfPath, { overwrite: true });
+
+    const originalFileHash = sha256File(originalPdfPath);
+    const createdAt = new Date().toISOString();
+
+    const record = {
+        document_id: documentId,
+        owner_id: ownerId,
+        original_name: originalName,
+        file_path: originalPdfPath,
+        original_file_hash: originalFileHash,
+        status: "submitted",
+        created_at: createdAt,
+        signed_at: null,
+        signature: null,
+        signature_payload: null,
+        file_hash: null,
+        signed_pdf_path: null,
+        token_hash: null,
+        verify_url: null,
+        qr_payload: null,
+        public_key: null,
+        public_key_id: null,
+        algorithm: null,
+        signature_provider: null
+    };
+
+    const saved = saveDocument(record);
+
+    fs.writeFileSync(
+        path.join(folder, "metadata.json"),
+        JSON.stringify(saved, null, 2)
+    );
+
+    writeAuditLog({
+        action: "submit",
+        documentId,
+        actor: ownerId,
+        ipAddress,
+        result: "success",
+        details: {}
+    });
+
+    return {
+        document_id: saved.document_id,
+        status: saved.status,
+        created_at: saved.created_at
+    };
+};
+
+export const signDocument = async ({ documentId, officerId = "officer", ipAddress = null }) => {
+    const document = findDocumentById(documentId);
+
+    if (!document) {
+        throw new Error("Document not found");
+    }
+
+    if (document.status !== "submitted") {
+        throw new Error(`Cannot sign document with status "${document.status}"`);
+    }
+
+    const documentFolder = createDocumentFolder(documentId);
+    const issuedAt = new Date().toISOString();
+    const activeKey = await getActiveKey();
+    const token = generateVerificationToken();
+    const verifyUrl = buildVerifyUrl(documentId, token);
+
+    // 1. Generate QR
+    const qrImagePath = await generateQrCode({ documentId, verifyUrl, token });
+
+    // 2. Embed QR + metadata into original PDF → signed.pdf
+    const signedFilePath = await embedQrIntoPdf({
+        sourceFilePath: document.file_path,
+        qrPath: qrImagePath,
+        outputFilePath: path.join(documentFolder, "signed.pdf"),
+        metadata: {
+            document_id: documentId,
+            verify_url: verifyUrl,
+            algorithm: activeKey.algorithm,
+            key_id: activeKey.key_id,
+            issued_at: issuedAt
+        }
+    });
+
+    // 3. Hash signed PDF
+    const fileHash = sha256File(signedFilePath);
+
+    // 4. Falcon-512 sign
+    const payload = buildSignaturePayload({
+        documentId,
+        fileHash,
+        issuedAt,
+        keyId: activeKey.key_id,
+        version: 1
+    });
+    const signatureInfo = await signPayload(payload);
+
+    // 5. Update document record
+    const updated = updateDocument(documentId, {
+        status: "issued",
+        signed_at: issuedAt,
+        signed_pdf_path: signedFilePath,
+        file_hash: fileHash,
+        signature: signatureInfo.signature,
+        signature_payload: payload,
+        algorithm: signatureInfo.algorithm,
+        signature_provider: signatureInfo.provider,
+        public_key_id: signatureInfo.key_id,
+        public_key: activeKey.public_key,
+        token_hash: sha256Text(token),
+        verify_url: verifyUrl,
+        qr_payload: {
+            document_id: documentId,
+            verify_url: verifyUrl,
+            token
+        }
+    });
+
+    // 6. Update metadata.json
+    fs.writeFileSync(
+        path.join(documentFolder, "metadata.json"),
+        JSON.stringify(updated, null, 2)
+    );
+
+    // 7. Audit
+    writeAuditLog({
+        action: "sign",
+        documentId,
+        actor: officerId,
+        ipAddress,
+        result: "success",
+        details: {
+            algorithm: signatureInfo.algorithm,
+            provider: signatureInfo.provider
+        }
+    });
+
+    return {
+        document_id: updated.document_id,
+        file_hash: updated.file_hash,
+        hash: updated.file_hash,
+        signature: updated.signature,
+        algorithm: updated.algorithm,
+        signature_provider: updated.signature_provider,
+        public_key_id: updated.public_key_id,
+        verify_url: updated.verify_url,
+        qr_payload: updated.qr_payload,
+        file_path: updated.signed_pdf_path,
+        signed_file: updated.signed_pdf_path,
+        original_file_hash: updated.original_file_hash,
+        signed_pdf_url: `/api/app/documents/${updated.document_id}/signed-pdf`,
+        status: updated.status,
+        signed_at: updated.signed_at
+    };
+};
+
+export const getDocumentsByStatus = (status) => {
+    return listDocuments()
+        .filter((doc) => doc.status === status)
+        .map((doc) => getDocument(doc.document_id));
+};
+
+export const getDocumentFile = (documentId) => {
+    const document = findDocumentById(documentId);
+    if (!document) return null;
+
+    const filePath = document.signed_pdf_path || document.file_path;
+    if (!filePath) return null;
+
+    const suffix = document.status === "issued" ? "signed" : "original";
+    return {
+        filePath,
+        fileName: `${document.document_id}-${suffix}.pdf`
     };
 };

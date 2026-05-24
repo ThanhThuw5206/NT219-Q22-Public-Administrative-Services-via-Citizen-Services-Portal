@@ -151,7 +151,7 @@ await savePreview({
         document_id: documentId,
 
         preview_url:
-            `/storage/documents/${documentId}/preview.pdf`,
+            `/api/app/documents/previews/${previewId}/file`,
 
         file_path: previewPath,
 
