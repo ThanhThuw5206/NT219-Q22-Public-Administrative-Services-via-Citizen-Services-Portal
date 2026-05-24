@@ -146,7 +146,7 @@
                         <td>${new Date(doc.signed_at).toLocaleString("vi-VN")}</td>
                         <td>
                             <button onclick="viewDoc('${doc.document_id}')" class="btn btn-sm btn-outline">Xem</button>
-                            <a href="/api/app/documents/${doc.document_id}/signed-pdf" class="btn btn-sm btn-primary" target="_blank">Tải PDF</a>
+                            <button onclick="downloadDocument('${doc.document_id}')" class="btn btn-sm btn-primary">Tải PDF</button>
                         </td>
                     </tr>
                 `).join("");
@@ -200,6 +200,14 @@
 
         function closeDetail() {
             document.getElementById("detailModal").style.display = "none";
+        }
+
+        async function downloadDocument(docId) {
+            try {
+                await apiDownload(`/app/documents/${docId}/signed-pdf`, `${docId}-signed.pdf`);
+            } catch (err) {
+                showAlert(err.message, "error");
+            }
         }
 
         function showAlert(msg, type) {

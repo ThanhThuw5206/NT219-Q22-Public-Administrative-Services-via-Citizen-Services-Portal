@@ -41,7 +41,8 @@ async function apiFetch(path, options = {}) {
         headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    const url = path.startsWith("/api/") ? path : `${API_BASE}${path}`;
+    const res = await fetch(url, { ...options, headers });
 
     if (res.status === 401) {
         logout();
@@ -78,6 +79,35 @@ async function apiPostForm(path, formData) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || "Request failed");
     return data;
+}
+
+async function apiBlobUrl(path) {
+    const res = await apiFetch(path);
+    if (!res) return null;
+    if (!res.ok) {
+        let message = "Request failed";
+        try {
+            message = (await res.json()).message || message;
+        } catch {
+            message = res.statusText || message;
+        }
+        throw new Error(message);
+    }
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+}
+
+async function apiDownload(path, filename) {
+    const blobUrl = await apiBlobUrl(path);
+    if (!blobUrl) return;
+
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename || "document.pdf";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 }
 
 function requireAuth() {

@@ -150,6 +150,8 @@
     <script src="/js/api.js"></script>
     <script src="/js/auth.js"></script>
     <script>
+        let currentPreviewId = null;
+
         if (!requireAuth()) { /* redirect */ } else {
             updateNav();
 
@@ -167,7 +169,8 @@
                 const formData = getFormData();
                 try {
                     const res = await apiPost("/app/documents/preview", formData);
-                    document.getElementById("previewFrame").src = res.data.preview_url;
+                    currentPreviewId = res.data.preview_id;
+                    document.getElementById("previewFrame").src = await apiBlobUrl(res.data.preview_url);
                     document.getElementById("previewModal").style.display = "flex";
                 } catch (err) {
                     showAlert(err.message, "error");
@@ -177,13 +180,21 @@
             document.getElementById("submitForm").addEventListener("submit", async (e) => {
                 e.preventDefault();
                 const formData = getFormData();
+                if (currentPreviewId) {
+                    formData.preview_id = currentPreviewId;
+                }
                 try {
                     const res = await apiPost("/app/documents/submit", formData);
                     showAlert(`Nộp hồ sơ thành công! Mã hồ sơ: ${res.data.document_id}`, "success");
                     document.getElementById("submitForm").reset();
+                    currentPreviewId = null;
                 } catch (err) {
                     showAlert(err.message, "error");
                 }
+            });
+
+            document.getElementById("submitForm").addEventListener("input", () => {
+                currentPreviewId = null;
             });
 
             loadMyDocs();
@@ -222,7 +233,7 @@
                         <td><span class="badge badge-${doc.status}">${doc.status === "issued" ? "Đã ký" : doc.status === "submitted" ? "Chờ duyệt" : doc.status}</span></td>
                         <td>${new Date(doc.created_at).toLocaleString("vi-VN")}</td>
                         <td>
-                            ${doc.status === "issued" ? `<a href="/api/app/documents/${doc.document_id}/signed-pdf" class="btn btn-sm btn-primary" target="_blank">Tải PDF</a>` : ""}
+                            ${doc.status === "issued" ? `<button onclick="downloadDocument('${doc.document_id}')" class="btn btn-sm btn-primary">Tải PDF</button>` : ""}
                             <a href="/verify.html?token=" class="btn btn-sm btn-outline" onclick="event.preventDefault();alert('Token: ${doc.verify_url ? new URL(doc.verify_url).searchParams.get('token') || 'N/A' : 'N/A'}')">Xem token</a>
                         </td>
                     </tr>
@@ -234,6 +245,14 @@
 
         function closePreview() {
             document.getElementById("previewModal").style.display = "none";
+        }
+
+        async function downloadDocument(docId) {
+            try {
+                await apiDownload(`/app/documents/${docId}/signed-pdf`, `${docId}-signed.pdf`);
+            } catch (err) {
+                showAlert(err.message, "error");
+            }
         }
 
         function showAlert(msg, type) {

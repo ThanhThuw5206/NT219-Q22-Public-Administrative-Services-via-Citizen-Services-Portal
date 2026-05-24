@@ -276,6 +276,12 @@ export const getDocuments = () => {
     return listDocuments().map((document) => getDocument(document.document_id));
 };
 
+export const getDocumentsByOwner = (ownerId) => {
+    return listDocuments()
+        .filter((document) => String(document.owner_id) === String(ownerId))
+        .map((document) => getDocument(document.document_id));
+};
+
 export const getSignedDocumentFile = (documentId) => {
     const document = findDocumentById(documentId);
 

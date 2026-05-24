@@ -18,7 +18,7 @@ import { seedDefaultUsers } from "./services/auth.service.js";
 ensureStorageFolders();
 await seedDefaultUsers();
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Auth
 app.use("/api/auth", authRoutes);
@@ -41,8 +41,8 @@ app.use(
     cryptoRoutes
 );
 
-// Static files
-app.use("/storage", express.static(path.resolve("storage")));
+// Static frontend files. Document storage is intentionally not exposed
+// directly; PDFs are served through authenticated/token-checked controllers.
 app.use(express.static(path.resolve("../frontend")));
 
 app.listen(PORT, () => {

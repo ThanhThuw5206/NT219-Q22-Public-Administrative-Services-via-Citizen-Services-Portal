@@ -1,4 +1,4 @@
-import { INTERNAL_CRYPTO_SECRET } from "../config/network.config.js";
+import { INTERNAL_CRYPTO_SECRET } from "../config/env.config.js";
 import * as auditService from "../services/audit.service.js";
 
 export const attachNetworkZone = (zone) => {
