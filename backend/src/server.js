@@ -8,17 +8,22 @@ import {
     requireCryptoZoneAccess,
 } from "./middlewares/network-zone.middleware.js";
 
+import authRoutes from "./routes/auth.routes.js";
 import cryptoRoutes from "./routes/crypto.routes.js";
 import documentRoutes from "./routes/document.routes.js";
 import publicRoutes from "./routes/public.routes.js";
-//thêm mới so vs bản cũ
 import { ensureStorageFolders } from "./utils/storage.util.js";
+import { seedDefaultUsers } from "./services/auth.service.js";
 
 ensureStorageFolders();
+await seedDefaultUsers();
 
 const PORT = 3000;
 
-// Routes
+// Auth
+app.use("/api/auth", authRoutes);
+
+// API Routes
 app.use("/api/public",
     attachNetworkZone(NETWORK_ZONES.PUBLIC),
     publicRoutes
@@ -36,10 +41,9 @@ app.use(
     cryptoRoutes
 );
 
-app.use(
-    "/storage",
-    express.static(path.resolve("storage"))
-);
+// Static files
+app.use("/storage", express.static(path.resolve("storage")));
+app.use(express.static(path.resolve("../frontend")));
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

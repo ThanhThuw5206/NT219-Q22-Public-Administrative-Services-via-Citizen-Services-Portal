@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng ký - Cổng Dịch vụ công</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="navbar">
+        <a href="/" class="logo">Cổng Dịch vụ công <span>Quốc gia</span></a>
+        <nav>
+            <a href="/">Dịch vụ công</a>
+            <a href="/verify.html">Xác minh</a>
+            <div id="navAuth"></div>
+        </nav>
+    </div>
+
+    <main class="auth-shell">
+        <div class="container-sm">
+            <div class="card auth-card">
+                <div class="auth-head">
+                    <div class="auth-icon">◉</div>
+                    <h2>Đăng ký tài khoản</h2>
+                    <p>Tạo tài khoản công dân để nộp hồ sơ và nhận kết quả trực tuyến.</p>
+                </div>
+                <div id="authError" class="alert alert-error" style="display:none"></div>
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label>Họ và tên</label>
+                        <input type="text" name="full_name" required placeholder="Nguyễn Văn A">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" name="email" required placeholder="you@example.com">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Mật khẩu</label>
+                            <input type="password" name="password" required minlength="6" placeholder="Tối thiểu 6 ký tự">
+                        </div>
+                        <div class="form-group">
+                            <label>Xác nhận mật khẩu</label>
+                            <input type="password" name="confirm_password" required placeholder="Nhập lại mật khẩu">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg" style="width:100%;margin-top:8px">Đăng ký</button>
+                </form>
+                <p style="text-align:center;margin-top:20px;font-size:14px;color:var(--gray-500)">
+                    Đã có tài khoản? <a href="/login.html" style="font-weight:800">Đăng nhập</a>
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-inner">
+            <div>
+                <h3>Cổng Dịch vụ công Quốc gia</h3>
+                <p>Hệ thống dịch vụ công, ký số Falcon-512 và xác minh tài liệu.</p>
+            </div>
+            <div class="footer-links"><strong>Thông tin</strong><a href="/">Trang chủ</a><a href="/verify.html">Xác minh</a></div>
+            <div class="footer-links"><strong>Tài khoản</strong><a href="/login.html">Đăng nhập</a><p>© 2026 NT219-Q22</p></div>
+        </div>
+    </footer>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script>updateNav();</script>
+</body>
+</html>

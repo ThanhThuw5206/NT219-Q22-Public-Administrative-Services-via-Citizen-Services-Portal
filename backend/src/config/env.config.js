@@ -23,6 +23,9 @@ const PUBLIC_VERIFY_URL =
     process.env.PUBLIC_VERIFY_URL ||
     "http://localhost:3000/api/public/documents/verify";
 
+const JWT_SECRET = process.env.JWT_SECRET || "change-me-in-production-jwt-secret";
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "24h";
+
 /**
  * `true` when running outside of `production`. Useful for relaxing checks
  * (e.g. allowing the default crypto secret) in dev/test.
@@ -34,6 +37,8 @@ const env = Object.freeze({
     INTERNAL_CRYPTO_SECRET,
     KEY_STORAGE_TYPE,
     PUBLIC_VERIFY_URL,
+    JWT_SECRET,
+    JWT_EXPIRES_IN,
     IS_DEV,
 });
 
@@ -42,6 +47,8 @@ export {
     INTERNAL_CRYPTO_SECRET,
     KEY_STORAGE_TYPE,
     PUBLIC_VERIFY_URL,
+    JWT_SECRET,
+    JWT_EXPIRES_IN,
     IS_DEV,
 };
 

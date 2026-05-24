@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác minh tài liệu - Cổng Dịch vụ công</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="navbar">
+        <a href="/" class="logo">Cổng Dịch vụ công <span>Quốc gia</span></a>
+        <nav>
+            <a href="/">Dịch vụ công</a>
+            <a href="/citizen/dashboard.html">Thủ tục hành chính</a>
+            <a href="/verify.html">Xác minh</a>
+            <div id="navAuth"></div>
+        </nav>
+    </div>
+
+    <main class="auth-shell">
+        <div class="container-sm">
+            <div class="card auth-card">
+                <div class="auth-head">
+                    <div class="auth-icon">⌕</div>
+                    <h2>Xác minh tài liệu</h2>
+                    <p>Nhập mã hồ sơ và token từ QR code trên tài liệu để kiểm tra chữ ký số.</p>
+                </div>
+                <div id="verifyError" class="alert alert-error" style="display:none"></div>
+                <form id="verifyForm">
+                    <div class="form-group">
+                        <label>Mã hồ sơ</label>
+                        <input type="text" name="documentId" required placeholder="HS-2026-XXXXXXXX">
+                    </div>
+                    <div class="form-group">
+                        <label>Token xác minh</label>
+                        <input type="text" name="token" required placeholder="Token từ QR code">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg" style="width:100%;margin-top:8px">Xác minh</button>
+                </form>
+            </div>
+
+            <div id="verifyResult" class="card" style="margin-top:24px;display:none">
+                <div class="card-header">
+                    <h2>Kết quả xác minh</h2>
+                    <span id="resultBadge" class="badge"></span>
+                </div>
+                <div class="detail-grid">
+                    <div class="detail-label">Mã hồ sơ</div>
+                    <div class="detail-value" id="rDocumentId">-</div>
+                    <div class="detail-label">Trạng thái</div>
+                    <div class="detail-value" id="rStatus">-</div>
+                    <div class="detail-label">Hash khớp</div>
+                    <div class="detail-value" id="rHashMatch">-</div>
+                    <div class="detail-label">Chữ ký hợp lệ</div>
+                    <div class="detail-value" id="rSigValid">-</div>
+                    <div class="detail-label">Thuật toán</div>
+                    <div class="detail-value" id="rAlgorithm">-</div>
+                    <div class="detail-label">Ký lúc</div>
+                    <div class="detail-value" id="rSignedAt">-</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-inner">
+            <div>
+                <h3>Cổng Dịch vụ công Quốc gia</h3>
+                <p>Hệ thống dịch vụ công, ký số Falcon-512 và xác minh tài liệu.</p>
+            </div>
+            <div class="footer-links"><strong>Thông tin</strong><a href="/">Trang chủ</a><a href="/login.html">Đăng nhập</a></div>
+            <div class="footer-links"><strong>Dịch vụ</strong><a href="/citizen/dashboard.html">Nộp hồ sơ</a><p>© 2026 NT219-Q22</p></div>
+        </div>
+    </footer>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script>
+        updateNav();
+
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("token")) document.querySelector("[name=token]").value = params.get("token");
+        if (params.get("id")) document.querySelector("[name=documentId]").value = params.get("id");
+
+        document.getElementById("verifyForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const errorEl = document.getElementById("verifyError");
+            const resultEl = document.getElementById("verifyResult");
+            errorEl.style.display = "none";
+            resultEl.style.display = "none";
+
+            const documentId = document.querySelector("[name=documentId]").value.trim();
+            const token = document.querySelector("[name=token]").value.trim();
+
+            try {
+                const res = await fetch(`/api/public/documents/verify/${documentId}?token=${encodeURIComponent(token)}`);
+                const data = await res.json();
+
+                resultEl.style.display = "block";
+                const badge = document.getElementById("resultBadge");
+                badge.className = `badge ${data.valid ? "badge-valid" : "badge-invalid"}`;
+                badge.textContent = data.valid ? "✓ HỢP LỆ" : "✕ KHÔNG HỢP LỆ";
+                document.getElementById("rDocumentId").textContent = data.document_id || "-";
+                document.getElementById("rStatus").textContent = data.status || "-";
+                document.getElementById("rHashMatch").textContent = data.hash_matched ? "✓ Có" : "✕ Không";
+                document.getElementById("rSigValid").textContent = data.signature_valid ? "✓ Có" : "✕ Không";
+                document.getElementById("rAlgorithm").textContent = data.algorithm || "-";
+                document.getElementById("rSignedAt").textContent = data.signed_at ? new Date(data.signed_at).toLocaleString("vi-VN") : "-";
+            } catch (err) {
+                errorEl.textContent = err.message;
+                errorEl.style.display = "block";
+            }
+        });
+    </script>
+</body>
+</html>

@@ -29,6 +29,17 @@ export const saveDocument = (document) => {
     return document;
 };
 
+export const updateDocument = (documentId, updates) => {
+    const documents = readDocuments();
+    const index = documents.findIndex(
+        (doc) => doc.document_id === documentId
+    );
+    if (index === -1) return null;
+    documents[index] = { ...documents[index], ...updates };
+    writeDocuments(documents);
+    return documents[index];
+};
+
 export const findDocumentById = (documentId) => {
     return readDocuments().find((document) => document.document_id === documentId) || null;
 };

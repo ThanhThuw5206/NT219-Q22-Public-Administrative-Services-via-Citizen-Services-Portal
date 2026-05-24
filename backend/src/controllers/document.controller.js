@@ -10,9 +10,13 @@ import {
     getDocument,
     getDocuments,
     getSignedDocumentFile,
+    getDocumentFile,
+    getDocumentsByStatus,
     processDocument,
+    submitDocument,
+    signDocument,
     verifyDocument
-} from "../services/document.service1.js";//dùng file mới 
+} from "../services/document.service1.js"; 
 import {
     validateCT01
 } from "../validators/ct01.validator.js";
@@ -229,4 +233,71 @@ export const downloadSignedDocument = (req, res) => {
     }
 
     res.download(signedFile.filePath, signedFile.fileName);
+};
+
+// ---------------------------------------------------------------------------
+// New: Citizen-Officer workflow
+// ---------------------------------------------------------------------------
+
+export const submitDocumentHandler = async (req, res) => {
+    try {
+        validateCT01(req.body);
+
+        const preview = await createPreviewDocument(req.body);
+
+        const result = await submitDocument({
+            documentId: preview.document_id,
+            filePath: preview.file_path,
+            originalName: "CT01.pdf",
+            ownerId: req.user?.id ? String(req.user.id) : "citizen",
+            ipAddress: req.ip
+        });
+
+        res.status(201).json({
+            message: "Document submitted for review",
+            data: {
+                document_id: result.document_id,
+                status: result.status,
+                preview_url: preview.preview_url
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const signDocumentHandler = async (req, res) => {
+    try {
+        const result = await signDocument({
+            documentId: req.params.documentId,
+            officerId: req.user?.full_name || "officer",
+            ipAddress: req.ip
+        });
+
+        res.status(201).json({
+            message: "Document signed and issued successfully",
+            documentInfo: result
+        });
+    } catch (error) {
+        const status = error.message.includes("not found") ? 404 : 400;
+        res.status(status).json({ message: error.message });
+    }
+};
+
+export const listPendingDocuments = (req, res) => {
+    res.json(getDocumentsByStatus("submitted"));
+};
+
+export const listIssuedDocuments = (req, res) => {
+    res.json(getDocumentsByStatus("issued"));
+};
+
+export const downloadDocumentFile = (req, res) => {
+    const file = getDocumentFile(req.params.documentId);
+
+    if (!file || !fs.existsSync(file.filePath)) {
+        return res.status(404).json({ message: "Document file not found" });
+    }
+
+    res.download(file.filePath, file.fileName);
 };

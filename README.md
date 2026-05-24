@@ -6,51 +6,47 @@ Hệ thống phát hành, ký số và xác minh tài liệu hành chính công 
 
 ## Luồng xử lý
 
-### Flow A — Upload PDF có sẵn
+### Flow A — Upload PDF có sẵn (cán bộ tự ký)
 
 ```text
-Client upload PDF
+Cán bộ upload PDF
     ↓
 POST /api/app/documents/upload  (multipart/form-data)
     ↓
 Backend:
-    - generate document_id (HS-{year}-{uuid})
-    - move file gốc → storage/{document_id}/original.pdf
-    - generate verification token (32-byte random)
-    - generate QR chứa { document_id, verify_url, token }
-    - embed QR + metadata box vào trang cuối PDF → signed.pdf
-    - SHA-256 hash signed.pdf
-    - Falcon-512 sign canonical payload
-    - lưu metadata + audit log
+    - generate document_id → move file → generate token → QR → embed → hash → Falcon sign
     ↓
 Trả: { document_id, file_hash, signature, verify_url, signed_pdf_url }
 ```
 
-### Flow B — Form-filling từ template CT01
+### Flow B — Công dân nộp đơn → Cán bộ ký số
 
 ```text
-Client nhập form (đăng ký tạm trú)
+BƯỚC 1: Công dân điền form
     ↓
 POST /api/app/documents/preview
     ↓
-Backend:
-    - validate dữ liệu (ct01.validator.js)
-    - render PDF từ template CT01 + font Roboto
-    - lưu preview → storage/documents/{document_id}/preview.pdf
-    - lưu metadata preview → previews.json
+Backend: validate → render PDF từ template CT01 → trả preview_url
     ↓
-Trả: { preview_id, document_id, preview_url }
+BƯỚC 2: Công dân xem preview, xác nhận nộp đơn
     ↓
-Client xem preview, bấm xác nhận
+POST /api/app/documents/submit
     ↓
-POST /api/app/documents/issue  { preview_id, owner_id }
+Backend: lưu document status="submitted"
     ↓
-Backend:
-    - lấy preview từ DB, kiểm tra hết hạn (15 phút)
-    - gọi processDocument với document_id từ preview
-    - generate token → generate QR → embed QR + metadata → hash → Falcon sign
+BƯỚC 3: Cán bộ xem danh sách chờ duyệt
     ↓
-Trả: { document_id, file_hash, signature, verify_url, signed_pdf_url }
+GET /api/app/documents/pending  (header: x-user-role: officer)
+    ↓
+BƯỚC 4: Cán bộ ký số
+    ↓
+POST /api/app/documents/:id/sign  (header: x-user-role: officer)
+    ↓
+Backend: QR → embed → hash → Falcon sign → status="issued"
+    ↓
+BƯỚC 5: Công dân xem/tải kết quả
+    ↓
+GET /api/app/documents/:id/download
 ```
 
 ---
@@ -83,13 +79,30 @@ Server mặc định: `http://localhost:3000`
 
 ### Application Zone — `/api/app/documents`
 
+#### Công dân (Citizen)
+
+| Method | Path | Header | Mô tả |
+|--------|------|--------|-------|
+| `POST` | `/preview` | — | Xem trước PDF từ form data (template CT01) |
+| `POST` | `/submit` | — | Nộp đơn, lưu status="submitted" |
+| `GET` | `/:documentId` | — | Xem chi tiết tài liệu |
+| `GET` | `/:documentId/download` | — | Tải PDF (original hoặc signed) |
+
+#### Cán bộ (Officer)
+
+| Method | Path | Header | Mô tả |
+|--------|------|--------|-------|
+| `GET` | `/pending` | `x-user-role: officer` | Danh sách đơn chờ duyệt |
+| `GET` | `/issued` | `x-user-role: officer` | Danh sách đơn đã ký |
+| `POST` | `/:documentId/sign` | `x-user-role: officer` | Ký số và phát hành đơn |
+| `POST` | `/upload` | — | Upload PDF có sẵn và ký (Flow A) |
+| `POST` | `/issue` | — | Ký từ preview_id (legacy, tương thích cũ) |
+
+#### Công khai
+
 | Method | Path | Mô tả |
 |--------|------|-------|
-| `POST` | `/preview` | Tạo preview PDF từ form data (template CT01) |
-| `POST` | `/issue` | Ký số và phát hành tài liệu từ preview |
-| `POST` | `/upload` | Upload PDF có sẵn và ký số |
 | `GET` | `/` | Liệt kê tất cả tài liệu |
-| `GET` | `/:documentId` | Xem chi tiết tài liệu |
 | `GET` | `/:documentId/signed-pdf` | Tải PDF đã ký |
 | `GET` | `/verify/:documentId?token=...` | Xác minh bằng QR token |
 | `POST` | `/verify/:documentId` | Xác minh bằng upload PDF + token |
@@ -156,17 +169,31 @@ Response:
 }
 ```
 
-### 2. Issue tài liệu và ký số
+### 2. Nộp đơn (Công dân)
+
+Sau khi xem preview, công dân xác nhận nộp:
 
 ```http
-POST /api/app/documents/issue
+POST /api/app/documents/submit
 Content-Type: application/json
 ```
 
 ```json
 {
-    "preview_id": "7e75199a-4bd3-4b3f-94e9-fc47a4df5a84",
-    "owner_id": 1
+    "owner_id": "citizen-001",
+    "office_name": "Công an phường Linh Trung",
+    "full_name": "Nguyễn Văn A",
+    "birth_day": "01",
+    "birth_month": "01",
+    "birth_year": "2000",
+    "gender": "Nam",
+    "citizen_id": "079203123456",
+    "phone": "0909999999",
+    "email": "nguyenvana@gmail.com",
+    "householder_name": "Nguyễn Văn B",
+    "householder_id": "079203654321",
+    "relationship": "người thuê",
+    "request_content": "Đăng ký tạm trú phục vụ học tập tại UIT"
 }
 ```
 
@@ -174,23 +201,39 @@ Response:
 
 ```json
 {
-    "message": "Document issued successfully",
+    "message": "Document submitted for review",
+    "data": {
+        "document_id": "HS-2026-A1B2C3D4",
+        "status": "submitted",
+        "preview_url": "/storage/documents/HS-2026-A1B2C3D4/preview.pdf"
+    }
+}
+```
+
+### 3. Cán bộ ký số
+
+```http
+POST /api/app/documents/HS-2026-A1B2C3D4/sign
+x-user-role: officer
+```
+
+Response:
+
+```json
+{
+    "message": "Document signed and issued successfully",
     "documentInfo": {
-        "document_id": "HS-2026-DF25B570",
+        "document_id": "HS-2026-A1B2C3D4",
         "file_hash": "a8cf0930c38647efb4cced489c8537c6fa0bd59e...",
         "signature": "OZRc8pVrgEdpjlO9xGMmvtnxc74EeNE7...",
         "algorithm": "FALCON-512",
         "signature_provider": "crypto-zone",
         "public_key_id": "falcon-development-key-02597ccf",
-        "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-DF25B570?token=...",
-        "qr_payload": {
-            "document_id": "HS-2026-DF25B570",
-            "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-DF25B570?token=...",
-            "token": "KfqH5dg1RzCK5QHEDQXipES7FEROOSZ5hRCzhwHo07k"
-        },
-        "signed_pdf_url": "/api/app/documents/HS-2026-DF25B570/signed-pdf",
+        "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-A1B2C3D4?token=...",
+        "qr_payload": { "document_id": "...", "verify_url": "...", "token": "..." },
+        "signed_pdf_url": "/api/app/documents/HS-2026-A1B2C3D4/signed-pdf",
         "status": "issued",
-        "signed_at": "2026-05-23T16:21:18.157Z"
+        "signed_at": "2026-05-24T10:30:00.000Z"
     }
 }
 ```
@@ -355,7 +398,8 @@ backend/src/
 │       └── falcon.service.js    ← Application-level: canonical JSON, sign, verify
 │
 ├── middlewares/
-│   └── network-zone.middleware.js ← attachNetworkZone, requireCryptoZoneAccess
+│   ├── network-zone.middleware.js ← attachNetworkZone, requireCryptoZoneAccess
+│   └── role.middleware.js         ← requireRole (RBAC demo)
 │
 ├── utils/
 │   └── storage.util.js          ← ensureStorageFolders, createDocumentFolder

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cán bộ - Cổng Dịch vụ công</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="navbar">
+        <a href="/" class="logo">Cổng Dịch vụ công <span>Quốc gia</span></a>
+        <nav>
+            <a href="/">Dịch vụ công</a>
+            <a href="/verify.html">Xác minh</a>
+            <div id="navAuth"></div>
+        </nav>
+    </div>
+
+    <main class="container">
+        <h1 class="page-title">Quản lý hồ sơ</h1>
+        <p class="page-subtitle">Tiếp nhận, xem chi tiết và ký số hồ sơ hành chính của công dân.</p>
+
+        <div id="alertBox" class="alert" style="display:none"></div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="pending">Chờ duyệt</div>
+            <div class="tab" data-tab="issued">Đã ký</div>
+        </div>
+
+        <div id="tab-pending" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Hồ sơ chờ ký số</h2>
+                    <button onclick="loadPending()" class="btn btn-sm btn-outline">Tải lại</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Mã hồ sơ</th>
+                                <th>Người nộp</th>
+                                <th>Ngày nộp</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pendingBody">
+                            <tr><td colspan="4" class="empty-state"><p>Đang tải...</p></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-issued" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Hồ sơ đã ký số</h2>
+                    <button onclick="loadIssued()" class="btn btn-sm btn-outline">Tải lại</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Mã hồ sơ</th>
+                                <th>Người nộp</th>
+                                <th>Ngày ký</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="issuedBody">
+                            <tr><td colspan="4" class="empty-state"><p>Đang tải...</p></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="detailModal" class="modal-overlay" style="display:none">
+        <div class="card" style="width:min(90vw,700px)">
+            <div class="card-header">
+                <h2 id="detailTitle">Chi tiết hồ sơ</h2>
+                <button onclick="closeDetail()" class="btn btn-sm btn-outline">Đóng</button>
+            </div>
+            <div id="detailContent"></div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script>
+        if (!requireRole("officer", "admin")) { /* redirect */ } else {
+            updateNav();
+
+            document.querySelectorAll(".tab").forEach(tab => {
+                tab.addEventListener("click", () => {
+                    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+                    document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+                    tab.classList.add("active");
+                    document.getElementById(`tab-${tab.dataset.tab}`).classList.add("active");
+                    if (tab.dataset.tab === "pending") loadPending();
+                    else loadIssued();
+                });
+            });
+
+            loadPending();
+        }
+
+        async function loadPending() {
+            try {
+                const docs = await apiGet("/app/documents/pending");
+                const tbody = document.getElementById("pendingBody");
+                if (!docs || docs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state"><p>Không có hồ sơ chờ duyệt</p></td></tr>';
+                    return;
+                }
+                tbody.innerHTML = docs.map(doc => `
+                    <tr>
+                        <td><strong>${doc.document_id}</strong></td>
+                        <td>${doc.owner_id || "-"}</td>
+                        <td>${new Date(doc.created_at).toLocaleString("vi-VN")}</td>
+                        <td>
+                            <button onclick="viewDoc('${doc.document_id}')" class="btn btn-sm btn-outline">Xem</button>
+                            <button onclick="signDoc('${doc.document_id}')" class="btn btn-sm btn-success">Ký số</button>
+                        </td>
+                    </tr>
+                `).join("");
+            } catch (err) {
+                showAlert(err.message, "error");
+            }
+        }
+
+        async function loadIssued() {
+            try {
+                const docs = await apiGet("/app/documents/issued");
+                const tbody = document.getElementById("issuedBody");
+                if (!docs || docs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state"><p>Chưa có hồ sơ nào đã ký</p></td></tr>';
+                    return;
+                }
+                tbody.innerHTML = docs.map(doc => `
+                    <tr>
+                        <td><strong>${doc.document_id}</strong></td>
+                        <td>${doc.owner_id || "-"}</td>
+                        <td>${new Date(doc.signed_at).toLocaleString("vi-VN")}</td>
+                        <td>
+                            <button onclick="viewDoc('${doc.document_id}')" class="btn btn-sm btn-outline">Xem</button>
+                            <a href="/api/app/documents/${doc.document_id}/signed-pdf" class="btn btn-sm btn-primary" target="_blank">Tải PDF</a>
+                        </td>
+                    </tr>
+                `).join("");
+            } catch (err) {
+                showAlert(err.message, "error");
+            }
+        }
+
+        async function viewDoc(docId) {
+            try {
+                const doc = await apiGet(`/app/documents/${docId}`);
+                document.getElementById("detailTitle").textContent = `Hồ sơ ${doc.document_id}`;
+                document.getElementById("detailContent").innerHTML = `
+                    <div class="detail-grid">
+                        <div class="detail-label">Mã hồ sơ</div>
+                        <div class="detail-value">${doc.document_id}</div>
+                        <div class="detail-label">Trạng thái</div>
+                        <div class="detail-value"><span class="badge badge-${doc.status}">${doc.status}</span></div>
+                        <div class="detail-label">Người nộp</div>
+                        <div class="detail-value">${doc.owner_id || "-"}</div>
+                        <div class="detail-label">Ngày tạo</div>
+                        <div class="detail-value">${new Date(doc.created_at).toLocaleString("vi-VN")}</div>
+                        ${doc.signed_at ? `
+                        <div class="detail-label">Ngày ký</div>
+                        <div class="detail-value">${new Date(doc.signed_at).toLocaleString("vi-VN")}</div>
+                        <div class="detail-label">Hash</div>
+                        <div class="detail-value" style="font-size:12px">${doc.file_hash || "-"}</div>
+                        <div class="detail-label">Chữ ký</div>
+                        <div class="detail-value" style="font-size:12px;word-break:break-all">${(doc.signature || "-").substring(0, 80)}...</div>
+                        <div class="detail-label">Verify URL</div>
+                        <div class="detail-value"><a href="${doc.verify_url}" target="_blank">${doc.verify_url || "-"}</a></div>
+                        ` : ""}
+                    </div>
+                `;
+                document.getElementById("detailModal").style.display = "flex";
+            } catch (err) {
+                showAlert(err.message, "error");
+            }
+        }
+
+        async function signDoc(docId) {
+            if (!confirm(`Xác nhận ký số hồ sơ ${docId}?`)) return;
+            try {
+                const res = await apiPost(`/app/documents/${docId}/sign`, {});
+                showAlert(`Ký số thành công! Hồ sơ ${res.documentInfo.document_id}`, "success");
+                loadPending();
+            } catch (err) {
+                showAlert(err.message, "error");
+            }
+        }
+
+        function closeDetail() {
+            document.getElementById("detailModal").style.display = "none";
+        }
+
+        function showAlert(msg, type) {
+            const el = document.getElementById("alertBox");
+            el.className = `alert alert-${type}`;
+            el.textContent = msg;
+            el.style.display = "block";
+            setTimeout(() => el.style.display = "none", 5000);
+        }
+    </script>
+</body>
+</html>
