@@ -38,13 +38,17 @@ const jsonPreviewRepo = {
 const mysqlPreviewRepo = {
     async savePreview(p) {
         const query = `
-            INSERT INTO document_previews (preview_id, document_id, preview_url, document_folder, status, issued_at)
-            VALUES (?, ?, ?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE document_id = ?, preview_url = ?, document_folder = ?, status = ?
+            INSERT INTO document_previews (preview_id, document_id, owner_id, preview_path, form_data, preview_url, document_folder, status, expired_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE document_id = ?, owner_id = ?, preview_path = ?, form_data = ?, preview_url = ?, document_folder = ?, status = ?, expired_at = ?
         `;
         await db.query(query, [
-            p.preview_id, p.document_id || null, p.preview_url || null, p.document_folder || null, p.status || 'pending',
-            p.document_id || null, p.preview_url || null, p.document_folder || null, p.status || 'pending'
+            p.preview_id, p.document_id || null, p.owner_id || null, p.preview_path || null,
+            p.form_data ? JSON.stringify(p.form_data) : null, p.preview_url || null,
+            p.document_folder || null, p.status || 'preview', p.expired_at || null,
+            p.document_id || null, p.owner_id || null, p.preview_path || null,
+            p.form_data ? JSON.stringify(p.form_data) : null, p.preview_url || null,
+            p.document_folder || null, p.status || 'preview', p.expired_at || null
         ]);
         return p;
     },
@@ -55,5 +59,5 @@ const mysqlPreviewRepo = {
     }
 };
 
-export const savePreview = isMySQL ? mysqlPreviewRepo.savePreview : jsonPreviewRepo.savePreview;
-export const findPreviewById = isMySQL ? mysqlPreviewRepo.findPreviewById : jsonPreviewRepo.findPreviewById;
+export const savePreview = isMySQL ? mysqlPreviewRepo.savePreview.bind(mysqlPreviewRepo) : jsonPreviewRepo.savePreview.bind(jsonPreviewRepo);
+export const findPreviewById = isMySQL ? mysqlPreviewRepo.findPreviewById.bind(mysqlPreviewRepo) : jsonPreviewRepo.findPreviewById.bind(jsonPreviewRepo);

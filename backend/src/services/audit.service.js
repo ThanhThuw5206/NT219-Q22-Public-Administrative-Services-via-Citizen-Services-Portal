@@ -41,24 +41,21 @@ const jsonAudit = {
 // ==========================================
 // CHẾ ĐỘ LƯU TRỮ BẰNG DATABASE MYSQL
 // ==========================================
-// LƯU Ý: Bạn hãy kiểm tra lại bảng trong file db.sql của bạn tên là 'verification_logs' hay 'audit_logs' nhé!
-const LOG_TABLE_NAME = "verification_logs"; 
+const LOG_TABLE_NAME = "audit_logs"; 
 
 const mysqlAudit = {
     async writeLog(entry) {
         const query = `
-            INSERT INTO ${LOG_TABLE_NAME} (log_id, action, document_id, actor, ip_address, result, details, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+            INSERT INTO ${LOG_TABLE_NAME} (user_id, action, document_id, ip_address, result)
+            VALUES (?, ?, ?, ?, ?)
         `;
         
         await db.query(query, [
-            entry.log_id,
+            entry.user_id || null,
             entry.action,
-            entry.document_id,
-            entry.actor,
-            entry.ip_address,
-            entry.result,
-            entry.details ? JSON.stringify(entry.details) : null
+            entry.document_id || null,
+            entry.ip_address || null,
+            entry.result
         ]);
         return entry;
     },
@@ -85,25 +82,27 @@ const isMySQL = DB_STORAGE_TYPE === "mysql";
 /**
  * Ghi nhận nhật ký hệ thống (Audit Log)
  */
-export const writeAuditLog = async ({ action, documentId = null, result, actor = "anonymous", ipAddress = null, details = {} }) => {
-    // Tạo mã log_id độc nhất không phụ thuộc vào độ dài mảng
-    const logId = `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+const VALID_ACTIONS = new Set(["submit", "sign", "verify", "download", "login", "logout", "key_access"]);
 
+export const writeAuditLog = async ({ action, documentId = null, result, userId = null, ipAddress = null }) => {
+    const safeAction = VALID_ACTIONS.has(action) ? action : "key_access";
     const entry = {
-        log_id: logId,
-        action,
+        user_id: userId,
+        action: safeAction,
         document_id: documentId,
-        actor,
         ip_address: ipAddress,
         result,
-        details,
         created_at: new Date().toISOString()
     };
 
-    if (isMySQL) {
-        return await mysqlAudit.writeLog(entry);
-    } else {
-        return jsonAudit.writeLog(entry);
+    try {
+        if (isMySQL) {
+            return await mysqlAudit.writeLog(entry);
+        } else {
+            return jsonAudit.writeLog(entry);
+        }
+    } catch (err) {
+        console.warn("[audit] Failed to write audit log:", err.message);
     }
 };
 
@@ -121,13 +120,12 @@ export const listAuditLogs = async () => {
 /**
  * Hàm bổ trợ logKeyAccess theo cấu trúc gọi của network-zone.middleware.js
  */
-export const logKeyAccess = async ({ keyId, actor, ipAddress, accessType, result }) => {
+export const logKeyAccess = async ({ userId, ipAddress, result }) => {
     return await writeAuditLog({
-        action: accessType || "crypto_zone_access",
-        documentId: keyId,
+        action: "key_access",
+        documentId: null,
         result,
-        actor,
-        ipAddress,
-        details: { message: `Yêu cầu truy cập vùng Crypto: ${accessType}` }
+        userId,
+        ipAddress
     });
 };

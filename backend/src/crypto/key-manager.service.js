@@ -190,10 +190,10 @@ function decryptPrivateKey(encryptedBuffer, password) {
  *
  * @param {{
  *   keyId: string | null,
- *   actor?: string,
+ *   userId?: string,
  *   ipAddress?: string | null,
  *   accessType: "read_public" | "read_private" | "sign" | "verify" | "rotate" | "generate",
- *   result: "success" | "denied" | "failed",
+ *   result: "success" | "fail",
  *   details?: Record<string, unknown>,
  * }} entry
  */
@@ -201,7 +201,13 @@ function safeAuditKeyAccess(entry) {
     try {
         if (typeof auditService.logKeyAccess === "function") {
             // Canonical API (added in Phase 3 of the spec).
-            auditService.logKeyAccess(entry);
+            auditService.logKeyAccess({
+                keyId: entry.keyId,
+                userId: entry.userId || null,
+                ipAddress: entry.ipAddress || null,
+                accessType: entry.accessType,
+                result: entry.result
+            });
             return;
         }
         if (typeof auditService.writeAuditLog === "function") {
@@ -212,13 +218,8 @@ function safeAuditKeyAccess(entry) {
                 action: "key_access",
                 documentId: null,
                 result: entry.result,
-                actor: entry.actor ?? "anonymous",
-                ipAddress: entry.ipAddress ?? null,
-                details: {
-                    key_id: entry.keyId,
-                    access_type: entry.accessType,
-                    ...(entry.details ?? {}),
-                },
+                userId: entry.userId || null,
+                ipAddress: entry.ipAddress || null
             });
             return;
         }

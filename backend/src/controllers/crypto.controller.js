@@ -19,17 +19,16 @@ import * as auditService from "../services/audit.service.js";
 /**
  * Defensive audit helper — works regardless of which audit methods exist.
  */
-function logAudit({ keyId, actor, ipAddress, accessType, result, details }) {
+function logAudit({ keyId, userId, ipAddress, accessType, result, details }) {
     if (typeof auditService.logKeyAccess === "function") {
-        auditService.logKeyAccess({ keyId, actor, ipAddress, accessType, result, details });
+        auditService.logKeyAccess({ keyId, userId, ipAddress, accessType, result });
     } else if (typeof auditService.writeAuditLog === "function") {
         auditService.writeAuditLog({
             action: `crypto.${accessType}`,
             documentId: null,
             result: result || "success",
-            actor: actor || "internal",
-            ipAddress,
-            details: { keyId, accessType, ...details },
+            userId: userId || null,
+            ipAddress
         });
     }
 }
@@ -59,10 +58,10 @@ export const cryptoSign = async (req, res) => {
 
         logAudit({
             keyId: result.key_id,
-            actor: req.ip || "internal",
+            userId: null,
             ipAddress: req.ip,
             accessType: "sign",
-            result: "success",
+            result: "success"
         });
 
         return res.json({
@@ -75,11 +74,10 @@ export const cryptoSign = async (req, res) => {
     } catch (error) {
         logAudit({
             keyId: null,
-            actor: req.ip || "internal",
+            userId: null,
             ipAddress: req.ip,
             accessType: "sign",
-            result: "error",
-            details: { error: error.message },
+            result: "fail"
         });
 
         return res.status(500).json({

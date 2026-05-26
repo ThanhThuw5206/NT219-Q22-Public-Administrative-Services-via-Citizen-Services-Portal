@@ -17,24 +17,20 @@ import {
     submitDocument,
     signDocument,
     verifyDocument
-} from "../services/document.service1.js"; 
+} from "../services/document.service1.js";
 import {
     validateCT01
 } from "../validators/ct01.validator.js";
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadDirectory = path.resolve(__dirname, "../uploads");
 
-// đảm bảo folder tồn tại
 const uploadFolder = "src/uploads/";
-
 if (!fs.existsSync(uploadFolder)) {
     fs.mkdirSync(uploadFolder, { recursive: true });
 }
 
-// cấu hình storage
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         fs.mkdirSync(uploadDirectory, { recursive: true });
@@ -49,7 +45,6 @@ const pdfOnly = (req, file, cb) => {
     if (file.mimetype !== "application/pdf") {
         return cb(new Error("Only PDF files are allowed"));
     }
-
     cb(null, true);
 };
 
@@ -65,10 +60,23 @@ const canAccessDocument = (user, document) => {
     if (canManageAllDocuments(user)) return true;
     return String(document.owner_id) === String(user.id);
 };
-  //mới thêm(nếu thấy r có thể xóa  cmt)
-export const previewDocument = async (req, res) => {
 
+// ---------------------------------------------------------------------------
+// Preview
+// ---------------------------------------------------------------------------
+
+export const previewDocument = async (req, res) => {
     try {
+        req.body.cccd = req.body.cccd || req.body.citizen_id;
+        req.body.reason = req.body.reason || req.body.request_content;
+
+        const dob =
+            req.body.dob ||
+            (req.body.birth_day && req.body.birth_month && req.body.birth_year
+                ? `${req.body.birth_year}-${req.body.birth_month}-${req.body.birth_day}`
+                : null);
+        req.body.dob = dob;
+
         validateCT01(req.body);
 
         const result = await createPreviewDocument({
@@ -80,287 +88,72 @@ export const previewDocument = async (req, res) => {
             message: "Preview generated",
             data: result
         });
-
-    } catch (error) {
-
-        res.status(500).json({
-            message: error.message
-        });
-
-    }
-
-};
-
-export const issueDocument = async (req, res) => {
-
-    try {
-
-        const preview = await getPreviewById(req.body.preview_id);
-
-        if (!preview) {
-            return res.status(404).json({
-                message: "Preview not found"
-            });
-        }
-      if (preview.expired_at && new Date(preview.expired_at) < new Date()) {
-
-        return res.status(400).json({
-            message: "Preview expired"
-        });
-
-    }
-
-       const parsedFormData =
-            typeof preview.form_data === "string"
-                ? JSON.parse(preview.form_data)
-                : preview.form_data;
-
-        const result = await processDocument({
-
-            documentId: preview.document_id,
-
-            filePath: preview.preview_path,
-
-            originalName: "CT01.pdf",
-
-            ownerId: preview.owner_id || (req.user?.id ? String(req.user.id) : "officer"),
-
-            ipAddress: req.ip,
-
-            formData: parsedFormData
-
-        });
-
-        res.status(201).json({
-
-            message: "Document issued successfully",
-
-            documentInfo: result
-
-        });
-
-    } catch (error) {
-
-        res.status(500).json({
-            message: error.message
-        });
-
-    }
-
-};
-//.
-export const uploadDocument = (req, res) => {
-    upload.single("file")(req, res, async function (err) {
-        if (err) {
-            return res.status(400).json({ message: err.message || "Upload error" });
-        }
-
-        if (!req.file) {
-            return res.status(400).json({ message: "No file uploaded" });
-        }
-
-        try {
-             const result = await processDocument({
-                 filePath: req.file.path,
-                 originalName: req.file.originalname,
-                 ownerId: req.user?.id ? String(req.user.id) : "demo-citizen",
-                 ipAddress: req.ip
-             });
-
-            //  Tạo preview document
-            //  const preview = await createPreviewDocument({
-            //      documentId: result.document_id,
-            //      filePath: req.file.path
-            //  });
-            // đã tạo preview trong processDocument nên ko cần tạo nữa
-            
-
-             res.status(201).json({
-                 message: "Upload, hash, digital signature and signed PDF OK",
-                 file: req.file.path,
-                 documentInfo: result
-             });
-            //thay thành
-            
-        //.
-        } catch (error) {
-            res.status(500).json({
-                message: "Document signing failed",
-                reason: error.message
-            });
-        }
-
-    });
-};
-
-export const verifyDocumentByQr = async (req, res) => {
-    const result = await verifyDocument({
-        documentId: req.params.documentId,
-        token: req.query.token,
-        actor: req.query.actor || "qr-verifier",
-        ipAddress: req.ip
-    });
-
-    res.status(result.valid ? 200 : 400).json(result);
-};
-
-export const verifyDocumentByUpload = (req, res) => {
-    upload.single("file")(req, res, async function (err) {
-        if (err) {
-            return res.status(400).json({ message: err.message || "Upload error" });
-        }
-
-        if (!req.file) {
-            return res.status(400).json({ message: "No file uploaded" });
-        }
-
-        const result = await verifyDocument({
-            documentId: req.params.documentId,
-            token: req.body.token || req.query.token,
-            filePath: req.file.path,
-            actor: req.body.actor || "upload-verifier",
-            ipAddress: req.ip
-        });
-
-        res.status(result.valid ? 200 : 400).json(result);
-    });
-};
-
-export const getDocumentDetail = (req, res) => {
-    const document = getDocument(req.params.documentId);
-
-    if (!document) {
-        return res.status(404).json({ message: "Document not found" });
-    }
-
-    if (!canAccessDocument(req.user, document)) {
-        return res.status(403).json({ message: "You do not have access to this document" });
-    }
-
-    res.json(document);
-};
-
-export const listDocumentDetails = (req, res) => {
-    if (canManageAllDocuments(req.user)) {
-        return res.json(getDocuments());
-    }
-
-    res.json(getDocumentsByOwner(req.user.id));
-};
-
-export const downloadSignedDocument = async (req, res) => {
-    const document = getDocument(req.params.documentId);
-
-    if (!document) {
-        return res.status(404).json({ message: "Document not found" });
-    }
-
-    const providedToken = req.query.token;
-    const tokenAllowed = typeof providedToken === "string"
-        ? (await verifyDocument({
-            documentId: req.params.documentId,
-            token: providedToken,
-            actor: "signed-pdf-download",
-            ipAddress: req.ip
-        })).valid
-        : false;
-
-    if (!tokenAllowed && !canAccessDocument(req.user, document)) {
-        return res.status(req.user ? 403 : 401).json({
-            message: "A valid login session or verification token is required"
-        });
-    }
-
-    const signedFile = getSignedDocumentFile(req.params.documentId);
-
-    if (!signedFile || !fs.existsSync(signedFile.filePath)) {
-        return res.status(404).json({ message: "Signed PDF not found" });
-    }
-
-    res.download(signedFile.filePath, signedFile.fileName);
-};
-
-export const downloadPreviewDocument = async (req, res) => {
-    const preview = await getPreviewById(req.params.previewId);
-
-    if (!preview) {
-        return res.status(404).json({ message: "Preview not found" });
-    }
-
-    const previewOwnerId = preview.owner_id ? String(preview.owner_id) : null;
-    const isOwner = previewOwnerId && String(req.user?.id) === previewOwnerId;
-
-    if (!isOwner && !canManageAllDocuments(req.user)) {
-        return res.status(403).json({ message: "You do not have access to this preview" });
-    }
-
-    if (!preview.preview_path || !fs.existsSync(preview.preview_path)) {
-        return res.status(404).json({ message: "Preview file not found" });
-    }
-
-    res.sendFile(path.resolve(preview.preview_path));
-};
-
-// ---------------------------------------------------------------------------
-// New: Citizen-Officer workflow
-// ---------------------------------------------------------------------------
-
-export const submitDocumentHandler = async (req, res) => {
-    try {
-        validateCT01(req.body);
-
-        let preview;
-        if (req.body.preview_id) {
-            preview = await getPreviewById(req.body.preview_id);
-            if (!preview) {
-                return res.status(404).json({ message: "Preview not found" });
-            }
-
-            if (preview.expired_at && new Date(preview.expired_at) < new Date()) {
-                return res.status(400).json({ message: "Preview expired" });
-            }
-
-            const previewOwnerId = preview.owner_id ? String(preview.owner_id) : null;
-            if (previewOwnerId && previewOwnerId !== String(req.user.id)) {
-                return res.status(403).json({ message: "You do not have access to this preview" });
-            }
-
-            if (!preview.preview_path || !fs.existsSync(preview.preview_path)) {
-                return res.status(400).json({ message: "Preview file not found or already submitted" });
-            }
-        } else {
-            preview = await createPreviewDocument({
-                ...req.body,
-                owner_id: req.user?.id ? String(req.user.id) : null
-            });
-        }
-
-        const result = await submitDocument({
-            documentId: preview.document_id,
-            filePath: preview.file_path,
-            originalName: "CT01.pdf",
-            ownerId: req.user?.id ? String(req.user.id) : "citizen",
-            ipAddress: req.ip
-        });
-
-        res.status(201).json({
-            message: "Document submitted for review",
-            data: {
-                document_id: result.document_id,
-                status: result.status,
-                preview_url: preview.preview_url
-            }
-        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 };
 
+// ---------------------------------------------------------------------------
+// Submit (Citizen nộp hồ sơ từ preview đã xác nhận)
+// ---------------------------------------------------------------------------
+
+export const submitDocumentHandler = async (req, res) => {
+    try {
+        req.body.cccd = req.body.cccd || req.body.citizen_id;
+        req.body.reason = req.body.reason || req.body.request_content;
+
+        const dob =
+            req.body.dob ||
+            (req.body.birth_day && req.body.birth_month && req.body.birth_year
+                ? `${req.body.birth_year}-${req.body.birth_month}-${req.body.birth_day}`
+                : null);
+        req.body.dob = dob;
+
+        validateCT01(req.body);
+
+        const preview = await getPreviewById(req.body.preview_id);
+        if (!preview) {
+            return res.status(404).json({ message: "Preview not found" });
+        }
+        if (preview.expired_at && new Date(preview.expired_at) < new Date()) {
+            return res.status(400).json({ message: "Preview expired" });
+        }
+
+        const previewOwnerId = preview.owner_id ? String(preview.owner_id) : null;
+        if (previewOwnerId && previewOwnerId !== String(req.user.id)) {
+            return res.status(403).json({ message: "You do not have access to this preview" });
+        }
+
+        if (!preview.preview_path || !fs.existsSync(preview.preview_path)) {
+            return res.status(400).json({ message: "Preview file not found" });
+        }
+
+        const result = await submitDocument({
+            documentId: preview.document_id,
+            filePath: preview.preview_path,
+            originalName: "CT01.pdf",
+            ownerId: req.user.id,
+            ipAddress: req.ip
+        });
+
+        res.status(201).json({
+            message: "CT01 submitted successfully",
+            data: result
+        });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Sign (Officer ký số hồ sơ)
+// ---------------------------------------------------------------------------
+
 export const signDocumentHandler = async (req, res) => {
     try {
         const result = await signDocument({
             documentId: req.params.documentId,
-            officerId: req.user?.full_name || "officer",
+            officerId: req.user?.id ? String(req.user.id) : "officer",
             ipAddress: req.ip
         });
 
@@ -371,6 +164,21 @@ export const signDocumentHandler = async (req, res) => {
     } catch (error) {
         const status = error.message.includes("not found") ? 404 : 400;
         res.status(status).json({ message: error.message });
+    }
+};
+
+// ---------------------------------------------------------------------------
+// List
+// ---------------------------------------------------------------------------
+
+export const listDocumentDetails = async (req, res) => {
+    try {
+        if (canManageAllDocuments(req.user)) {
+            return res.json(await getDocuments());
+        }
+        res.json(await getDocumentsByOwner(req.user.id));
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
 };
 
@@ -392,19 +200,229 @@ export const listIssuedDocuments = async (req, res) => {
     }
 };
 
-export const downloadDocumentFile = async (req, res) => {
+// ---------------------------------------------------------------------------
+// Detail
+// ---------------------------------------------------------------------------
+
+export const getDocumentDetail = async (req, res) => {
     try {
-        const document = await getDocument(req.params.documentId); // Thêm await
+        const document = await getDocument(req.params.documentId);
 
         if (!document) {
             return res.status(404).json({ message: "Document not found" });
         }
 
         if (!canAccessDocument(req.user, document)) {
-            return res.status(403).json({ message: "You do not have access..." });
+            return res.status(403).json({ message: "You do not have access to this document" });
         }
 
-        // ... Giữ nguyên phần code sendFile phía sau của bạn
+        res.json(document);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Download
+// ---------------------------------------------------------------------------
+
+export const downloadDocumentFile = async (req, res) => {
+    try {
+        const document = await getDocument(req.params.documentId);
+
+        if (!document) {
+            return res.status(404).json({ message: "Document not found" });
+        }
+
+        if (!canAccessDocument(req.user, document)) {
+            return res.status(403).json({ message: "You do not have access to this document" });
+        }
+
+        const fileInfo = await getDocumentFile(req.params.documentId);
+        if (!fileInfo || !fs.existsSync(fileInfo.filePath)) {
+            return res.status(404).json({ message: "File not found" });
+        }
+
+        res.download(fileInfo.filePath, fileInfo.fileName);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const downloadSignedDocument = async (req, res) => {
+    try {
+        const document = await getDocument(req.params.documentId);
+
+        if (!document) {
+            return res.status(404).json({ message: "Document not found" });
+        }
+
+        const providedToken = req.query.token;
+        const tokenAllowed = typeof providedToken === "string"
+            ? (await verifyDocument({
+                documentId: req.params.documentId,
+                token: providedToken,
+                userId: "signed-pdf-download",
+                ipAddress: req.ip
+            })).valid
+            : false;
+
+        if (!tokenAllowed && !canAccessDocument(req.user, document)) {
+            return res.status(req.user ? 403 : 401).json({
+                message: "A valid login session or verification token is required"
+            });
+        }
+
+        const signedFile = await getSignedDocumentFile(req.params.documentId);
+
+        if (!signedFile || !fs.existsSync(signedFile.filePath)) {
+            return res.status(404).json({ message: "Signed PDF not found" });
+        }
+
+        res.download(signedFile.filePath, signedFile.fileName);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const downloadPreviewDocument = async (req, res) => {
+    try {
+        const preview = await getPreviewById(req.params.previewId);
+
+        if (!preview) {
+            return res.status(404).json({ message: "Preview not found" });
+        }
+
+        const previewOwnerId = preview.owner_id ? String(preview.owner_id) : null;
+        const isOwner = previewOwnerId && String(req.user?.id) === previewOwnerId;
+
+        if (!isOwner && !canManageAllDocuments(req.user)) {
+            return res.status(403).json({ message: "You do not have access to this preview" });
+        }
+
+        if (!preview.preview_path || !fs.existsSync(preview.preview_path)) {
+            return res.status(404).json({ message: "Preview file not found" });
+        }
+
+        res.sendFile(path.resolve(preview.preview_path));
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Verify
+// ---------------------------------------------------------------------------
+
+export const verifyDocumentByQr = async (req, res) => {
+    try {
+        const result = await verifyDocument({
+            documentId: req.params.documentId,
+            token: req.query.token,
+            userId: req.user?.id ? String(req.user.id) : null,
+            ipAddress: req.ip
+        });
+        res.status(result.valid ? 200 : 400).json(result);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const verifyDocumentByUpload = (req, res) => {
+    upload.single("file")(req, res, async function (err) {
+        if (err) {
+            return res.status(400).json({ message: err.message || "Upload error" });
+        }
+        if (!req.file) {
+            return res.status(400).json({ message: "No file uploaded" });
+        }
+        try {
+            const result = await verifyDocument({
+                documentId: req.params.documentId,
+                token: req.body.token || req.query.token,
+                filePath: req.file.path,
+                userId: req.user?.id ? String(req.user.id) : null,
+                ipAddress: req.ip
+            });
+            res.status(result.valid ? 200 : 400).json(result);
+        } catch (error) {
+            res.status(500).json({ message: error.message });
+        }
+    });
+};
+
+// ---------------------------------------------------------------------------
+// Upload (legacy - officer upload trực tiếp)
+// ---------------------------------------------------------------------------
+
+export const uploadDocument = (req, res) => {
+    upload.single("file")(req, res, async function (err) {
+        if (err) {
+            return res.status(400).json({ message: err.message || "Upload error" });
+        }
+        if (!req.file) {
+            return res.status(400).json({ message: "No file uploaded" });
+        }
+        try {
+            const result = await processDocument({
+                filePath: req.file.path,
+                originalName: req.file.originalname,
+                ownerId: req.user?.id ? String(req.user.id) : "demo-citizen",
+                ipAddress: req.ip
+            });
+            res.status(201).json({
+                message: "Upload, hash, digital signature and signed PDF OK",
+                file: req.file.path,
+                documentInfo: result
+            });
+        } catch (error) {
+            res.status(500).json({
+                message: "Document signing failed",
+                reason: error.message
+            });
+        }
+    });
+};
+
+// ---------------------------------------------------------------------------
+// Issue (legacy - officer tạo và ký ngay từ preview)
+// ---------------------------------------------------------------------------
+
+export const issueDocument = async (req, res) => {
+    try {
+        const preview = await getPreviewById(req.body.preview_id);
+
+        if (!preview) {
+            return res.status(404).json({ message: "Preview not found" });
+        }
+
+        if (preview.expired_at && new Date(preview.expired_at) < new Date()) {
+            return res.status(400).json({ message: "Preview expired" });
+        }
+
+        if (!preview.preview_path || !fs.existsSync(preview.preview_path)) {
+            return res.status(400).json({ message: "Preview file not found" });
+        }
+
+        // Submit rồi ký ngay (flow legacy: citizen + officer cùng lúc)
+        await submitDocument({
+            documentId: preview.document_id,
+            filePath: preview.preview_path,
+            originalName: "CT01.pdf",
+            ownerId: preview.owner_id || (req.user?.id ? String(req.user.id) : "officer"),
+            ipAddress: req.ip
+        });
+
+        const result = await signDocument({
+            documentId: preview.document_id,
+            officerId: req.user?.id ? String(req.user.id) : "officer",
+            ipAddress: req.ip
+        });
+
+        res.status(201).json({
+            message: "Document issued successfully",
+            documentInfo: result
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

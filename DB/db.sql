@@ -82,10 +82,11 @@ CREATE TABLE document_previews (
 CREATE TABLE documents (
     document_id VARCHAR(50) PRIMARY KEY,
     owner_id INT NOT NULL,
-    file_hash CHAR(64) NOT NULL,
-    signature TEXT NOT NULL,
-    public_key_id INT NOT NULL,
-    token_hash CHAR(64) NOT NULL,
+    file_hash CHAR(64) NULL,
+    signature TEXT NULL,
+    public_key_id VARCHAR(100) NULL,
+    public_key TEXT NULL,
+    token_hash CHAR(64) NULL,
     status ENUM('submitted', 'issued', 'revoked') DEFAULT 'submitted',
     verify_url TEXT NULL,
     qr_payload JSON NULL,
@@ -101,12 +102,11 @@ CREATE TABLE documents (
     original_pdf_path TEXT NULL,
     signed_pdf_path TEXT NULL,
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (public_key_id) REFERENCES keys_pub(key_id),
     FOREIGN KEY (preview_id) REFERENCES document_previews(preview_id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- Thêm khóa ngoại chéo từ bảng nháp Previews sang bảng chính Documents
-ALTER TABLE document_previews ADD CONSTRAINT fk_preview_document FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE SET NULL;
+-- Không thêm FK từ document_previews.document_id → documents vì preview được tạo TRƯỚC khi document tồn tại
+-- document_id trong document_previews là plain reference string, không phải FK
 
 -- =========================================================================
 -- 8. BẢNG DOCUMENT_SIGNATURES (Lịch sử chữ ký số)
@@ -117,10 +117,9 @@ CREATE TABLE document_signatures (
     file_hash CHAR(64) NOT NULL,
     signature TEXT NOT NULL,
     algorithm VARCHAR(50) DEFAULT 'FALCON',
-    public_key_id INT NOT NULL,
+    public_key_id VARCHAR(100) NULL,
     signed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE CASCADE,
-    FOREIGN KEY (public_key_id) REFERENCES keys_pub(key_id)
+    FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- =========================================================================
@@ -142,7 +141,7 @@ CREATE TABLE verification_tokens (
 CREATE TABLE audit_logs (
     log_id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT NULL,
-    action ENUM('submit', 'sign', 'verify', 'download', 'login', 'logout') NOT NULL,
+    action ENUM('submit', 'sign', 'verify', 'download', 'login', 'logout', 'key_access') NOT NULL,
     document_id VARCHAR(50) NULL,
     ip_address VARCHAR(50) NULL,
     result ENUM('success', 'fail') NOT NULL,

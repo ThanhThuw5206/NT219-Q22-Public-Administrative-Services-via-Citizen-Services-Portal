@@ -18,19 +18,18 @@ export const requireCryptoZoneAccess = async (req, res, next) => { // 1. THÊM T
             if (typeof auditService.logKeyAccess === "function") {
                 await auditService.logKeyAccess({ // 2. THÊM TỪ KHÓA await TẠI ĐÂY
                     keyId: null,
-                    actor: req.ip,
+                    userId: null,
                     ipAddress: req.ip,
                     accessType: "crypto_zone_access",
-                    result: "denied",
+                    result: "fail"
                 });
             } else if (typeof auditService.writeAuditLog === "function") {
                 await auditService.writeAuditLog({ // 3. THÊM TỪ KHÓA await TẠI ĐÂY
                     action: "key_access",
                     documentId: null,
-                    result: "denied",
-                    actor: req.ip || "anonymous",
-                    ipAddress: req.ip,
-                    details: { reason: "MISSING_OR_INVALID_INTERNAL_SECRET" },
+                    result: "fail",
+                    userId: null,
+                    ipAddress: req.ip
                 });
             }
         } catch (_err) {

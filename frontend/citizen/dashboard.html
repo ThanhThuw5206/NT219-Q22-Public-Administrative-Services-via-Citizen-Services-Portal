@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Công dân - Cổng Dịch vụ công</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="../css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="navbar">
-        <a href="/" class="logo">Cổng Dịch vụ công <span>Quốc gia</span></a>
+        <a href="../index.html" class="logo">Cổng Dịch vụ công <span>Quốc gia</span></a>
         <nav>
-            <a href="/">Dịch vụ công</a>
-            <a href="/verify.html">Xác minh</a>
+            <a href="../index.html">Dịch vụ công</a>
+            <a href="../verify.html">Xác minh</a>
             <div id="navAuth"></div>
         </nav>
     </div>
@@ -147,8 +147,8 @@
         </div>
     </div>
 
-    <script src="/js/api.js"></script>
-    <script src="/js/auth.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/auth.js"></script>
     <script>
         let currentPreviewId = null;
 
@@ -221,7 +221,8 @@
 
         async function loadMyDocs() {
             try {
-                const all = await apiGet("/app/documents/");
+                const res = await apiGet("/app/documents/");
+                const all = Array.isArray(res) ? res : (res.data || []);
                 const tbody = document.getElementById("docTableBody");
                 if (!all || all.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="4" class="empty-state"><p>Chưa có hồ sơ nào</p></td></tr>';
@@ -234,7 +235,7 @@
                         <td>${new Date(doc.created_at).toLocaleString("vi-VN")}</td>
                         <td>
                             ${doc.status === "issued" ? `<button onclick="downloadDocument('${doc.document_id}')" class="btn btn-sm btn-primary">Tải PDF</button>` : ""}
-                            <a href="/verify.html?token=" class="btn btn-sm btn-outline" onclick="event.preventDefault();alert('Token: ${doc.verify_url ? new URL(doc.verify_url).searchParams.get('token') || 'N/A' : 'N/A'}')">Xem token</a>
+                            <a href="../verify.html?token=" class="btn btn-sm btn-outline" onclick="event.preventDefault();alert('Token: ${doc.verify_url ? new URL(doc.verify_url).searchParams.get('token') || 'N/A' : 'N/A'}')">Xem token</a>
                         </td>
                     </tr>
                 `).join("");
