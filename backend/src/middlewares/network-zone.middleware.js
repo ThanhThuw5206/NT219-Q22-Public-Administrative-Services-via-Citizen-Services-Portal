@@ -9,14 +9,14 @@ export const attachNetworkZone = (zone) => {
     };
 };
 
-export const requireCryptoZoneAccess = (req, res, next) => {
+// Tìm hàm requireCryptoZoneAccess và sửa lại như sau:
+export const requireCryptoZoneAccess = async (req, res, next) => { // 1. THÊM TỪ KHÓA async TẠI ĐÂY
     const providedSecret = req.header("x-internal-crypto-secret");
 
     if (providedSecret !== INTERNAL_CRYPTO_SECRET) {
-        // Audit log the denied access attempt (defensive — never crash on audit failure)
         try {
             if (typeof auditService.logKeyAccess === "function") {
-                auditService.logKeyAccess({
+                await auditService.logKeyAccess({ // 2. THÊM TỪ KHÓA await TẠI ĐÂY
                     keyId: null,
                     actor: req.ip,
                     ipAddress: req.ip,
@@ -24,7 +24,7 @@ export const requireCryptoZoneAccess = (req, res, next) => {
                     result: "denied",
                 });
             } else if (typeof auditService.writeAuditLog === "function") {
-                auditService.writeAuditLog({
+                await auditService.writeAuditLog({ // 3. THÊM TỪ KHÓA await TẠI ĐÂY
                     action: "key_access",
                     documentId: null,
                     result: "denied",

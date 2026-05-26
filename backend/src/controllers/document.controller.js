@@ -374,30 +374,38 @@ export const signDocumentHandler = async (req, res) => {
     }
 };
 
-export const listPendingDocuments = (req, res) => {
-    res.json(getDocumentsByStatus("submitted"));
+export const listPendingDocuments = async (req, res) => {
+    try {
+        const documents = await getDocumentsByStatus("submitted");
+        res.json(documents);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
 };
 
-export const listIssuedDocuments = (req, res) => {
-    res.json(getDocumentsByStatus("issued"));
+export const listIssuedDocuments = async (req, res) => {
+    try {
+        const documents = await getDocumentsByStatus("issued");
+        res.json(documents);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
 };
 
-export const downloadDocumentFile = (req, res) => {
-    const document = getDocument(req.params.documentId);
+export const downloadDocumentFile = async (req, res) => {
+    try {
+        const document = await getDocument(req.params.documentId); // Thêm await
 
-    if (!document) {
-        return res.status(404).json({ message: "Document not found" });
+        if (!document) {
+            return res.status(404).json({ message: "Document not found" });
+        }
+
+        if (!canAccessDocument(req.user, document)) {
+            return res.status(403).json({ message: "You do not have access..." });
+        }
+
+        // ... Giữ nguyên phần code sendFile phía sau của bạn
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
-
-    if (!canAccessDocument(req.user, document)) {
-        return res.status(403).json({ message: "You do not have access to this document" });
-    }
-
-    const file = getDocumentFile(req.params.documentId);
-
-    if (!file || !fs.existsSync(file.filePath)) {
-        return res.status(404).json({ message: "Document file not found" });
-    }
-
-    res.download(file.filePath, file.fileName);
 };
