@@ -10,7 +10,6 @@
  *   POST /sign        — sign a payload with the active key
  *   POST /verify      — verify a signature against a public key
  *
- * Related: Requirements 9.4, 9.10, 12.11, 12.12, 12.13.
  */
 
 import express from "express";

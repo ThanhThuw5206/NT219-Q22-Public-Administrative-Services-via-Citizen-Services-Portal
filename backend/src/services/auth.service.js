@@ -12,6 +12,20 @@ const dataFilePath = path.join(dataDirectory, "users.json");
 
 const isMySQL = DB_STORAGE_TYPE === "mysql";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validateRegistrationInput({ full_name, email, password }) {
+    if (!full_name || typeof full_name !== "string" || full_name.trim().length < 2) {
+        throw new Error("Full name must be at least 2 characters");
+    }
+    if (!email || !EMAIL_RE.test(email)) {
+        throw new Error("Invalid email format");
+    }
+    if (!password || typeof password !== "string" || password.length < 6) {
+        throw new Error("Password must be at least 6 characters");
+    }
+}
+
 // ==========================================
 // CHẾ ĐỘ FILE JSON (Cũ của nhóm)
 // ==========================================
@@ -30,6 +44,7 @@ const jsonAuth = {
         return users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
     },
     async register({ full_name, email, password }) {
+        validateRegistrationInput({ full_name, email, password });
         const users = this.readUsers();
         if (users.find(u => u.email === email)) {
             throw new Error("Email already registered");
@@ -109,6 +124,7 @@ const jsonAuth = {
 // ==========================================
 const mysqlAuth = {
     async register({ full_name, email, password }) {
+        validateRegistrationInput({ full_name, email, password });
         const [existing] = await db.query("SELECT id FROM users WHERE email = ?", [email]);
         if (existing.length > 0) {
             throw new Error("Email already registered");

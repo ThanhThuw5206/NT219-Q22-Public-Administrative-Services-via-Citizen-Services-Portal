@@ -54,19 +54,19 @@ afterAll(() => {
 });
 
 describe("document access helpers", () => {
-    it("returns only documents owned by the requested citizen", () => {
-        const ownerOneDocuments = getDocumentsByOwner("1");
+    it("returns only documents owned by the requested citizen", async () => {
+        const ownerOneDocuments = await getDocumentsByOwner("1");
 
         expect(ownerOneDocuments).toHaveLength(1);
         expect(ownerOneDocuments[0].document_id).toBe("HS-TEST-OWNER-1");
     });
 
-    it("keeps all documents available for officer/admin listing paths", () => {
-        expect(getDocuments()).toHaveLength(2);
+    it("keeps all documents available for officer/admin listing paths", async () => {
+        expect(await getDocuments()).toHaveLength(2);
     });
 
-    it("returns a sanitized document detail shape", () => {
-        const document = getDocument("HS-TEST-OWNER-2");
+    it("returns a sanitized document detail shape", async () => {
+        const document = await getDocument("HS-TEST-OWNER-2");
 
         expect(document.owner_id).toBe("2");
         expect(document.signed_pdf_url).toBe("/api/app/documents/HS-TEST-OWNER-2/signed-pdf");

@@ -94,7 +94,7 @@
             const token = document.querySelector("[name=token]").value.trim();
 
             try {
-                const res = await fetch(`./api/public/documents/verify/${documentId}?token=${encodeURIComponent(token)}`);
+                const res = await fetch(`${API_BASE}/public/documents/verify/${documentId}?token=${encodeURIComponent(token)}`);
                 if (!res.ok) {
                     throw new Error("Không thể xác minh tài liệu");
                 }
