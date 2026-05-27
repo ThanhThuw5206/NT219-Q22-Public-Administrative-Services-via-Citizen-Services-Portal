@@ -39,13 +39,30 @@ Payload được ký có dạng canonical JSON:
   "version": "1.0"
 }
 ```
+# Cài package
 
-## Chạy demo
+```bash
+npm install qrcode fs-extra
 
-```powershell
+npm install pdf-lib
+
+npm install @noble/post-quantum
+
+npm install @pdf-lib/fontkit
+```
+# connect frontend vs backend
+```bash
 cd backend
-npm.cmd install
-npm.cmd start
+npm install cors
+```
+---
+
+# Chạy backend
+
+```bash
+cd backend
+npm install
+npm start
 ```
 
 Mở:
@@ -53,8 +70,6 @@ Mở:
 ```text
 http://localhost:3000
 ```
-
-Nếu dùng PowerShell và gặp lỗi execution policy với `npm`, dùng `npm.cmd` như trên.
 
 ## Tài khoản demo
 
@@ -71,6 +86,14 @@ password: admin123
 ```
 
 Công dân có thể đăng ký trực tiếp tại `/register.html`.
+
+---
+# Sửa 1 vài vấn đề bảo mật
+- Sửa lại DB
+- thêm DB_PORT=3306 // có thể sửa nếu port đã có app khác dùng
+- đồng bộ BE vs DB
+- Kết nối FE vs BE
+---
 
 ## API chính
 

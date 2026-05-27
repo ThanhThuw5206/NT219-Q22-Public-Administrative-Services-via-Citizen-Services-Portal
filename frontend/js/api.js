@@ -1,4 +1,4 @@
-const API_BASE = "/api";
+const API_BASE = "http://localhost:3000/api";//connect to backend server
 
 function getToken() {
     return localStorage.getItem("token");

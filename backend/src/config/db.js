@@ -1,18 +1,14 @@
-import mysql from "mysql2";
+import mysql from "mysql2/promise";
 
-const db = mysql.createConnection({
+const db = mysql.createPool({
     host: process.env.DB_HOST || "localhost",
+    port: parseInt(process.env.DB_PORT || "3306", 10),
     user: process.env.DB_USER || "root",
-    password: process.env.DB_PASSWORD || "",
-    database: process.env.DB_NAME || "document_verification"
-});
-
-db.connect((err) => {
-    if (err) {
-        console.log("DB connection error", err);
-    } else {
-        console.log("MySQL Connected");
-    }
+    password: process.env.DB_PASSWORD || "182806",
+    database: process.env.DB_NAME || "document_verification",
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
 export default db;

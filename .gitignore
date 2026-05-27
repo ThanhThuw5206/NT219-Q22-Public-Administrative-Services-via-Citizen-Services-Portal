@@ -6,4 +6,6 @@ backend/src/keys/
 backend/src/crypto/keys/
 .env
 .kiro
+.claude/
+CONFLICT_ANALYSIS.md
 

@@ -26,6 +26,8 @@ const PUBLIC_VERIFY_URL =
 const JWT_SECRET = process.env.JWT_SECRET || "change-me-in-production-jwt-secret";
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "24h";
 
+const DB_STORAGE_TYPE = process.env.DB_STORAGE_TYPE || "json";
+
 /**
  * `true` when running outside of `production`. Useful for relaxing checks
  * (e.g. allowing the default crypto secret) in dev/test.
@@ -40,6 +42,7 @@ const env = Object.freeze({
     JWT_SECRET,
     JWT_EXPIRES_IN,
     IS_DEV,
+    DB_STORAGE_TYPE,
 });
 
 export {
@@ -50,6 +53,7 @@ export {
     JWT_SECRET,
     JWT_EXPIRES_IN,
     IS_DEV,
+    DB_STORAGE_TYPE,
 };
 
 export default env;

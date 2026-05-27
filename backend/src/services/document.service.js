@@ -83,13 +83,9 @@ export const processDocument = async (input) => {
     writeAuditLog({
         action: "sign",
         documentId,
-        actor: ownerId,
+        userId: ownerId,
         ipAddress,
-        result: "success",
-        details: {
-            algorithm: signatureInfo.algorithm,
-            provider: signatureInfo.provider
-        }
+        result: "success"
     });
 
     return {
@@ -111,11 +107,11 @@ export const processDocument = async (input) => {
     };
 };
 
-export const verifyDocument = ({ documentId, token, filePath = null, actor = "anonymous", ipAddress = null }) => {
+export const verifyDocument = ({ documentId, token, filePath = null, userId = null, ipAddress = null }) => {
     const document = findDocumentById(documentId);
 
     if (!document) {
-        writeAuditLog({ action: "verify", documentId, actor, ipAddress, result: "not_found" });
+        writeAuditLog({ action: "verify", documentId, userId, ipAddress, result: "fail" });
         return {
             valid: false,
             reason: "DOCUMENT_NOT_FOUND"
@@ -123,7 +119,7 @@ export const verifyDocument = ({ documentId, token, filePath = null, actor = "an
     }
 
     if (document.token_hash !== sha256Text(token || "")) {
-        writeAuditLog({ action: "verify", documentId, actor, ipAddress, result: "denied" });
+        writeAuditLog({ action: "verify", documentId, userId, ipAddress, result: "fail" });
         return {
             valid: false,
             reason: "INVALID_TOKEN"
@@ -131,7 +127,7 @@ export const verifyDocument = ({ documentId, token, filePath = null, actor = "an
     }
 
     if (document.status !== "issued") {
-        writeAuditLog({ action: "verify", documentId, actor, ipAddress, result: "revoked" });
+        writeAuditLog({ action: "verify", documentId, userId, ipAddress, result: "fail" });
         return {
             valid: false,
             reason: "DOCUMENT_NOT_ACTIVE",
@@ -158,13 +154,9 @@ export const verifyDocument = ({ documentId, token, filePath = null, actor = "an
     writeAuditLog({
         action: "verify",
         documentId,
-        actor,
+        userId,
         ipAddress,
-        result: valid ? "success" : "failed",
-        details: {
-            hash_matched: hashMatched,
-            signature_valid: signatureValid
-        }
+        result: valid ? "success" : "fail"
     });
 
     return {

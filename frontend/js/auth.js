@@ -55,9 +55,8 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             try {
-                const res = await apiPost("/auth/register", { full_name, email, password });
-                setAuth(res.data.token, res.data.user);
-                window.location.href = "/citizen/dashboard.html";
+                await apiPost("/auth/register", { full_name, email, password });
+                window.location.href = "/login.html?registered=1";
             } catch (err) {
                 if (errorEl) {
                     errorEl.textContent = err.message;

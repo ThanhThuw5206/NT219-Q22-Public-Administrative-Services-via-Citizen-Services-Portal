@@ -4,16 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Xác minh tài liệu - Cổng Dịch vụ công</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="./css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="navbar">
-        <a href="/" class="logo">Cổng Dịch vụ công <span>Quốc gia</span></a>
+        <a href="./index.html" class="logo">Cổng Dịch vụ công <span>Quốc gia</span></a>
         <nav>
-            <a href="/">Dịch vụ công</a>
-            <a href="/citizen/dashboard.html">Thủ tục hành chính</a>
-            <a href="/verify.html">Xác minh</a>
+            <a href="./index.html">Dịch vụ công</a>
+            <a href="./citizen/dashboard.html">Thủ tục hành chính</a>
+            <a href="./verify.html">Xác minh</a>
             <div id="navAuth"></div>
         </nav>
     </div>
@@ -69,13 +69,13 @@
                 <h3>Cổng Dịch vụ công Quốc gia</h3>
                 <p>Hệ thống dịch vụ công, ký số Falcon-512 và xác minh tài liệu.</p>
             </div>
-            <div class="footer-links"><strong>Thông tin</strong><a href="/">Trang chủ</a><a href="/login.html">Đăng nhập</a></div>
-            <div class="footer-links"><strong>Dịch vụ</strong><a href="/citizen/dashboard.html">Nộp hồ sơ</a><p>© 2026 NT219-Q22</p></div>
+            <div class="footer-links"><strong>Thông tin</strong><a href="./index.html">Trang chủ</a><a href="./login.html">Đăng nhập</a></div>
+            <div class="footer-links"><strong>Dịch vụ</strong><a href="./citizen/dashboard.html">Nộp hồ sơ</a><p>© 2026 NT219-Q22</p></div>
         </div>
     </footer>
 
-    <script src="/js/api.js"></script>
-    <script src="/js/auth.js"></script>
+    <script src="./js/api.js"></script>
+    <script src="./js/auth.js"></script>
     <script>
         updateNav();
 
@@ -94,7 +94,10 @@
             const token = document.querySelector("[name=token]").value.trim();
 
             try {
-                const res = await fetch(`/api/public/documents/verify/${documentId}?token=${encodeURIComponent(token)}`);
+                const res = await fetch(`./api/public/documents/verify/${documentId}?token=${encodeURIComponent(token)}`);
+                if (!res.ok) {
+                    throw new Error("Không thể xác minh tài liệu");
+                }
                 const data = await res.json();
 
                 resultEl.style.display = "block";
