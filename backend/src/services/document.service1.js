@@ -1,29 +1,42 @@
-//orchestrator
+/**
+ * document.service1.js - Điều phối nghiệp vụ tài liệu
+ * Xử lý toàn bộ vòng đời tài liệu: nộp hồ sơ → ký số → xác minh
+ */
 import crypto from "crypto";
 import fs from "fs";
 import { hashFile, hashText } from "../crypto/hash.service.js";
 import { saveDocument, updateDocument, findDocumentById, listDocuments } from "./document.repository.js";
 import { buildSignaturePayload, getActiveKey, signPayload, verifyPayloadSignature } from "../crypto/signature.service.js";
 import { writeAuditLog } from "./audit.service.js";
+import { getUserById } from "./auth.service.js";
 import path from "path";
 import fsExtra from "fs-extra";
 import { createDocumentFolder } from "../utils/storage.util.js";
 import { generateQrCode } from "./qr.service.js";
 import { embedQrIntoPdf } from "./pdf.service.js";
 
+/** Tạo mã hồ sơ duy nhất theo định dạng HS-{NĂM}-{8 ký tự UUID} */
 const generateDocumentId = () => {
     return `HS-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 };
 
+/** Tạo token xác minh ngẫu nhiên 32 bytes, mã hóa base64url */
 const generateVerificationToken = () => {
     return crypto.randomBytes(32).toString("base64url");
 };
 
+/** Tạo URL xác minh công khai từ PUBLIC_VERIFY_URL trong .env */
 const buildVerifyUrl = (documentId, token) => {
     const baseUrl = process.env.PUBLIC_VERIFY_URL || "http://localhost:3000/api/public/documents/verify";
     return `${baseUrl}/${documentId}?token=${token}`;
 };
 
+/**
+ * Xử lý tài liệu trọn gói (legacy): nộp + ký số + sinh QR trong một bước.
+ * Dùng cho flow officer upload trực tiếp qua POST /upload.
+ * @param {Object} input - { filePath, documentId, originalName, ownerId, ipAddress }
+ * @returns {Object} Thông tin tài liệu đã ký
+ */
 export const processDocument = async (input) => {
     const { filePath, documentId, originalName, ownerId, ipAddress } = input;
 
@@ -103,6 +116,12 @@ export const processDocument = async (input) => {
 
     return saved;
 };
+
+/**
+ * Xác minh tính hợp lệ của tài liệu: kiểm tra token, hash file, chữ ký Falcon-512.
+ * @param {Object} params - { documentId, token, filePath (tùy chọn), userId, ipAddress }
+ * @returns {Object} Kết quả xác minh: valid, reason, hash_matched, signature_valid, ...
+ */
 export const verifyDocument = async ({ documentId, token, filePath = null, userId = null, ipAddress = null }) => {
     const document = await findDocumentById(documentId);
 
@@ -189,6 +208,7 @@ export const verifyDocument = async ({ documentId, token, filePath = null, userI
     };
 };
 
+/** Lấy thông tin chi tiết một tài liệu theo documentId, bao gồm tên người nộp */
 export const getDocument = async (documentId) => {
     const document = await findDocumentById(documentId);
 
@@ -196,9 +216,17 @@ export const getDocument = async (documentId) => {
         return null;
     }
 
+    // Tra cứu tên người nộp từ bảng users
+    let owner_name = null;
+    try {
+        const owner = await getUserById(document.owner_id);
+        if (owner) owner_name = owner.full_name;
+    } catch (_) { /* bỏ qua nếu không tìm thấy */ }
+
     return {
         document_id: document.document_id,
         owner_id: document.owner_id,
+        owner_name,
         original_name: document.original_name,
         file_hash: document.file_hash,
         hash: document.file_hash,
@@ -215,12 +243,14 @@ export const getDocument = async (documentId) => {
     };
 };
 
+/** Lấy danh sách tài liệu thuộc về một công dân cụ thể */
 export const getDocumentsByOwner = async (ownerId) => {
     const allDocs = await listDocuments();
     const filteredDocs = allDocs.filter((doc) => doc.owner_id === ownerId);
     return Promise.all(filteredDocs.map((doc) => getDocument(doc.document_id)));
 };
 
+/** Lấy đường dẫn file PDF đã ký để tải xuống */
 export const getSignedDocumentFile = async (documentId) => {
     const document = await findDocumentById(documentId);
 
@@ -235,9 +265,14 @@ export const getSignedDocumentFile = async (documentId) => {
 };
 
 // ---------------------------------------------------------------------------
-// New: Citizen-Officer workflow
+// Quy trình Citizen - Officer
 // ---------------------------------------------------------------------------
 
+/**
+ * Công dân nộp hồ sơ: lưu file PDF, tạo bản ghi trạng thái "submitted".
+ * @param {Object} params - { documentId, filePath, originalName, ownerId, ipAddress }
+ * @returns {Object} Thông tin hồ sơ đã nộp
+ */
 export const submitDocument = async ({ documentId, filePath, originalName, ownerId = "citizen", ipAddress = null }) => {
     const folder = createDocumentFolder(documentId);
     const originalPdfPath = path.join(folder, "original.pdf");
@@ -292,6 +327,11 @@ export const submitDocument = async ({ documentId, filePath, originalName, owner
     };
 };
 
+/**
+ * Cán bộ ký số hồ sơ: sinh QR, nhúng vào PDF, ký Falcon-512, chuyển trạng thái "issued".
+ * @param {Object} params - { documentId, officerId, ipAddress }
+ * @returns {Object} Thông tin tài liệu đã ký và phát hành
+ */
 export const signDocument = async ({ documentId, officerId = "officer", ipAddress = null }) => {
     const document = await findDocumentById(documentId);
 
@@ -394,6 +434,7 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
     };
 };
 
+/** Lấy toàn bộ danh sách tài liệu (dành cho officer/admin) */
 export const getDocuments = async () => {
     const allDocs = await listDocuments();
     return Promise.all(
@@ -401,6 +442,7 @@ export const getDocuments = async () => {
     );
 };
 
+/** Lấy danh sách tài liệu theo trạng thái (submitted, issued, ...) */
 export const getDocumentsByStatus = async (status) => {
     const allDocs = await listDocuments();
     const filteredDocs = allDocs.filter((doc) => doc.status === status);
@@ -411,6 +453,7 @@ export const getDocumentsByStatus = async (status) => {
     );
 };
 
+/** Lấy đường dẫn file PDF (gốc hoặc đã ký) để tải xuống */
 export const getDocumentFile = async (documentId) => {
     const document = await findDocumentById(documentId);
     if (!document) return null;

@@ -1,6 +1,10 @@
+/**
+ * auth.middleware.js - Xác thực JWT cho các endpoint yêu cầu đăng nhập.
+ */
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "../config/env.config.js";
 
+/** Xác thực bắt buộc: trả 401 nếu token không hợp lệ hoặc thiếu */
 export const authenticate = (req, res, next) => {
     const header = req.headers.authorization;
     if (!header || !header.startsWith("Bearer ")) {
@@ -22,6 +26,7 @@ export const authenticate = (req, res, next) => {
     }
 };
 
+/** Xác thực tùy chọn: không từ chối nếu token thiếu, chỉ gắn user nếu hợp lệ */
 export const optionalAuthenticate = (req, _res, next) => {
     const header = req.headers.authorization;
     if (!header || !header.startsWith("Bearer ")) {

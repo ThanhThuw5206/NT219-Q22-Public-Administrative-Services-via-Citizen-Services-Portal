@@ -1,34 +1,45 @@
-const API_BASE = "http://localhost:3000/api";//connect to backend server
+/** URL gốc của backend API */
+const API_BASE = "http://localhost:3000/api";
 
+/** Lấy JWT token từ localStorage */
 function getToken() {
     return localStorage.getItem("token");
 }
 
+/** Lấy thông tin người dùng từ localStorage */
 function getUser() {
     const raw = localStorage.getItem("user");
     return raw ? JSON.parse(raw) : null;
 }
 
+/** Lưu token và thông tin người dùng vào localStorage sau khi đăng nhập */
 function setAuth(token, user) {
     localStorage.setItem("token", token);
     localStorage.setItem("user", JSON.stringify(user));
 }
 
+/** Xóa session và chuyển về trang đăng nhập */
 function logout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     window.location.href = "/login.html";
 }
 
+/** Kiểm tra người dùng đã đăng nhập chưa */
 function isLoggedIn() {
     return !!getToken();
 }
 
+/** Lấy vai trò đầu tiên của người dùng (citizen, officer, admin) */
 function getUserRole() {
     const user = getUser();
     return user?.roles?.[0] || null;
 }
 
+/**
+ * Gọi API tự động đính kèm JWT token.
+ * Tự động đăng xuất khi nhận lỗi 401 (token hết hạn).
+ */
 async function apiFetch(path, options = {}) {
     const token = getToken();
     const headers = { ...options.headers };
@@ -52,6 +63,7 @@ async function apiFetch(path, options = {}) {
     return res;
 }
 
+/** Gọi GET, trả về JSON */
 async function apiGet(path) {
     const res = await apiFetch(path);
     if (!res) return null;
@@ -59,6 +71,7 @@ async function apiGet(path) {
     return res.json();
 }
 
+/** Gọi POST với JSON body */
 async function apiPost(path, body) {
     const res = await apiFetch(path, {
         method: "POST",
@@ -70,6 +83,7 @@ async function apiPost(path, body) {
     return data;
 }
 
+/** Gọi POST với FormData (dùng cho upload file) */
 async function apiPostForm(path, formData) {
     const res = await apiFetch(path, {
         method: "POST",
@@ -81,6 +95,7 @@ async function apiPostForm(path, formData) {
     return data;
 }
 
+/** Tải file dưới dạng blob, trả về URL tạm để hiển thị trong iframe */
 async function apiBlobUrl(path) {
     const res = await apiFetch(path);
     if (!res) return null;
@@ -97,6 +112,7 @@ async function apiBlobUrl(path) {
     return URL.createObjectURL(blob);
 }
 
+/** Tải file về máy người dùng */
 async function apiDownload(path, filename) {
     const blobUrl = await apiBlobUrl(path);
     if (!blobUrl) return;
@@ -110,6 +126,7 @@ async function apiDownload(path, filename) {
     setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 }
 
+/** Yêu cầu đăng nhập, chuyển về login.html nếu chưa đăng nhập */
 function requireAuth() {
     if (!isLoggedIn()) {
         window.location.href = "/login.html";
@@ -118,6 +135,7 @@ function requireAuth() {
     return true;
 }
 
+/** Yêu cầu vai trò cụ thể, chuyển về trang chủ nếu không khớp */
 function requireRole(...roles) {
     const user = getUser();
     if (!user || !roles.some(r => user.roles?.includes(r))) {

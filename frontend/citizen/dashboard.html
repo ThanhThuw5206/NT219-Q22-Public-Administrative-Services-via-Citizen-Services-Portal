@@ -228,17 +228,21 @@
                     tbody.innerHTML = '<tr><td colspan="4" class="empty-state"><p>Chưa có hồ sơ nào</p></td></tr>';
                     return;
                 }
-                tbody.innerHTML = all.map(doc => `
+                tbody.innerHTML = all.map(doc => {
+                    const statusLabel = doc.status === "issued" ? "Đã ký" : doc.status === "submitted" ? "Chờ duyệt" : doc.status;
+                    const verifyToken = doc.verify_url ? new URL(doc.verify_url).searchParams.get("token") : null;
+                    const verifyLink = verifyToken ? `../verify.html?id=${doc.document_id}&token=${verifyToken}` : "#";
+                    return `
                     <tr>
                         <td><strong>${doc.document_id}</strong></td>
-                        <td><span class="badge badge-${doc.status}">${doc.status === "issued" ? "Đã ký" : doc.status === "submitted" ? "Chờ duyệt" : doc.status}</span></td>
+                        <td><span class="badge badge-${doc.status}">${statusLabel}</span></td>
                         <td>${new Date(doc.created_at).toLocaleString("vi-VN")}</td>
                         <td>
                             ${doc.status === "issued" ? `<button onclick="downloadDocument('${doc.document_id}')" class="btn btn-sm btn-primary">Tải PDF</button>` : ""}
-                            <a href="../verify.html?token=" class="btn btn-sm btn-outline" onclick="event.preventDefault();alert('Token: ${doc.verify_url ? new URL(doc.verify_url).searchParams.get('token') || 'N/A' : 'N/A'}')">Xem token</a>
+                            ${verifyToken ? `<a href="${verifyLink}" class="btn btn-sm btn-outline">Xác minh</a>` : ""}
                         </td>
-                    </tr>
-                `).join("");
+                    </tr>`;
+                }).join("");
             } catch (err) {
                 console.error(err);
             }

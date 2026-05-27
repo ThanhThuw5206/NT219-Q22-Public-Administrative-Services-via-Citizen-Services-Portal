@@ -1,6 +1,11 @@
+/**
+ * network-zone.middleware.js - Gắn thông tin vùng mạng và bảo vệ zone nội bộ.
+ * 4 vùng: PUBLIC, APPLICATION, CRYPTO, DATA
+ */
 import { INTERNAL_CRYPTO_SECRET } from "../config/env.config.js";
 import * as auditService from "../services/audit.service.js";
 
+/** Gắn metadata vùng mạng vào request và set header X-Network-Zone */
 export const attachNetworkZone = (zone) => {
     return (req, res, next) => {
         req.networkZone = zone;
@@ -10,6 +15,7 @@ export const attachNetworkZone = (zone) => {
 };
 
 // Tìm hàm requireCryptoZoneAccess và sửa lại như sau:
+/** Bảo vệ zone mã hóa: yêu cầu header x-internal-crypto-secret hợp lệ */
 export const requireCryptoZoneAccess = async (req, res, next) => { // 1. THÊM TỪ KHÓA async TẠI ĐÂY
     const providedSecret = req.header("x-internal-crypto-secret");
 
@@ -45,6 +51,7 @@ export const requireCryptoZoneAccess = async (req, res, next) => { // 1. THÊM T
     next();
 };
 
+/** Thêm header bảo mật: chống sniffing, clickjacking, rò rỉ referrer */
 export const securityHeaders = (req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");

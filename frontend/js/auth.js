@@ -1,3 +1,7 @@
+/**
+ * auth.js - Xử lý đăng nhập, đăng ký và điều hướng thanh điều hướng.
+ * Tự động gắn sự kiện cho form login/register nếu tồn tại trên trang.
+ */
 document.addEventListener("DOMContentLoaded", () => {
     const loginForm = document.getElementById("loginForm");
     const registerForm = document.getElementById("registerForm");
@@ -67,6 +71,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 });
 
+/**
+ * Cập nhật thanh điều hướng dựa trên trạng thái đăng nhập.
+ * - Đã đăng nhập: hiển thị Dashboard, tên người dùng, vai trò, nút Đăng xuất
+ * - Chưa đăng nhập: hiển thị nút Đăng nhập, Đăng ký
+ */
 function updateNav() {
     const navAuth = document.getElementById("navAuth");
     if (!navAuth) return;

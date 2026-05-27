@@ -118,7 +118,7 @@
                 tbody.innerHTML = docs.map(doc => `
                     <tr>
                         <td><strong>${doc.document_id}</strong></td>
-                        <td>${doc.owner_id || "-"}</td>
+                        <td>${doc.owner_name || doc.owner_id || "-"}</td>
                         <td>${new Date(doc.created_at).toLocaleString("vi-VN")}</td>
                         <td>
                             <button onclick="viewDoc('${doc.document_id}')" class="btn btn-sm btn-outline">Xem</button>
@@ -142,7 +142,7 @@
                 tbody.innerHTML = docs.map(doc => `
                     <tr>
                         <td><strong>${doc.document_id}</strong></td>
-                        <td>${doc.owner_id || "-"}</td>
+                        <td>${doc.owner_name || doc.owner_id || "-"}</td>
                         <td>${new Date(doc.signed_at).toLocaleString("vi-VN")}</td>
                         <td>
                             <button onclick="viewDoc('${doc.document_id}')" class="btn btn-sm btn-outline">Xem</button>
@@ -166,7 +166,7 @@
                         <div class="detail-label">Trạng thái</div>
                         <div class="detail-value"><span class="badge badge-${doc.status}">${doc.status}</span></div>
                         <div class="detail-label">Người nộp</div>
-                        <div class="detail-value">${doc.owner_id || "-"}</div>
+                        <div class="detail-value">${doc.owner_name || doc.owner_id || "-"}</div>
                         <div class="detail-label">Ngày tạo</div>
                         <div class="detail-value">${new Date(doc.created_at).toLocaleString("vi-VN")}</div>
                         ${doc.signed_at ? `
