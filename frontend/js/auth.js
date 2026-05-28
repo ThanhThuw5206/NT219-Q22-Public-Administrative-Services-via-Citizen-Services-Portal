@@ -78,17 +78,21 @@ document.addEventListener("DOMContentLoaded", () => {
  */
 function updateNav() {
     const navAuth = document.getElementById("navAuth");
+    const navThutuc = document.getElementById("navThutuc");
     if (!navAuth) return;
 
     const user = getUser();
     if (user) {
         const role = user.roles[0];
-        const dashboard = role === "officer" || role === "admin"
+        const dashboardPath = role === "officer" || role === "admin"
             ? "/officer/dashboard.html"
             : "/citizen/dashboard.html";
 
+        if (navThutuc) {
+            navThutuc.href = dashboardPath;
+        }
+
         navAuth.innerHTML = `
-            <a href="${dashboard}" class="btn btn-sm btn-outline">Dashboard</a>
             <span class="nav-user">${user.full_name} (${role})</span>
             <button onclick="logout()" class="btn btn-sm btn-danger">Đăng xuất</button>
         `;

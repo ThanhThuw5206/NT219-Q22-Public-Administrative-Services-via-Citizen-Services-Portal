@@ -232,6 +232,7 @@ export const getDocument = async (documentId) => {
         hash: document.file_hash,
         file_path: document.signed_pdf_path || document.file_path,
         original_file_hash: document.original_file_hash || null,
+        signature: document.signature || null,
         algorithm: document.algorithm,
         signature_provider: document.signature_provider,
         public_key_id: document.public_key_id,
@@ -247,7 +248,9 @@ export const getDocument = async (documentId) => {
 export const getDocumentsByOwner = async (ownerId) => {
     const allDocs = await listDocuments();
     const filteredDocs = allDocs.filter((doc) => doc.owner_id === ownerId);
-    return Promise.all(filteredDocs.map((doc) => getDocument(doc.document_id)));
+    const docs = await Promise.all(filteredDocs.map((doc) => getDocument(doc.document_id)));
+    docs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return docs;
 };
 
 /** Lấy đường dẫn file PDF đã ký để tải xuống */
@@ -458,10 +461,15 @@ export const getDocumentsByStatus = async (status) => {
     const allDocs = await listDocuments();
     const filteredDocs = allDocs.filter((doc) => doc.status === status);
 
-    // Chạy song song gom chi tiết thông tin document
-    return Promise.all(
+    const docs = await Promise.all(
         filteredDocs.map((doc) => getDocument(doc.document_id))
     );
+
+    // Sắp xếp mới nhất lên đầu
+    const dateField = status === "issued" ? "signed_at" : "created_at";
+    docs.sort((a, b) => new Date(b[dateField]) - new Date(a[dateField]));
+
+    return docs;
 };
 
 /** Lấy đường dẫn file PDF (gốc hoặc đã ký) để tải xuống */

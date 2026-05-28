@@ -12,6 +12,8 @@
         <a href="../index.html" class="logo">Cổng Dịch vụ công <span>Quốc gia</span></a>
         <nav>
             <a href="../index.html">Dịch vụ công</a>
+            <a id="navThutuc" href="../citizen/dashboard.html">Thủ tục hành chính</a>
+            <a href="../index.html#news">Tin tức</a>
             <a href="../verify.html">Xác minh</a>
             <div id="navAuth"></div>
         </nav>
@@ -254,7 +256,26 @@
 
         async function downloadDocument(docId) {
             try {
-                await apiDownload(`/app/documents/${docId}/signed-pdf`, `${docId}-signed.pdf`);
+                const res = await apiFetch(`/app/documents/${docId}/signed-pdf`);
+                if (!res) return;
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    if (data.tampered) {
+                        showAlert("⚠️ Không thể tải xuống: File PDF đã bị sửa đổi sau khi ký số. Vui lòng liên hệ cơ quan có thẩm quyền.", "error");
+                    } else {
+                        showAlert(data.message || "Tải xuống thất bại", "error");
+                    }
+                    return;
+                }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `${docId}-signed.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
             } catch (err) {
                 showAlert(err.message, "error");
             }

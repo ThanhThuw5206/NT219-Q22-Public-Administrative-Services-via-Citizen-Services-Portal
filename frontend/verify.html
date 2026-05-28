@@ -12,7 +12,8 @@
         <a href="./index.html" class="logo">Cổng Dịch vụ công <span>Quốc gia</span></a>
         <nav>
             <a href="./index.html">Dịch vụ công</a>
-            <a href="./citizen/dashboard.html">Thủ tục hành chính</a>
+            <a id="navThutuc" href="./citizen/dashboard.html">Thủ tục hành chính</a>
+            <a href="./index.html#news">Tin tức</a>
             <a href="./verify.html">Xác minh</a>
             <div id="navAuth"></div>
         </nav>
@@ -95,21 +96,43 @@
 
             try {
                 const res = await fetch(`${API_BASE}/public/documents/verify/${documentId}?token=${encodeURIComponent(token)}`);
-                if (!res.ok) {
-                    throw new Error("Không thể xác minh tài liệu");
-                }
                 const data = await res.json();
 
-                resultEl.style.display = "block";
-                const badge = document.getElementById("resultBadge");
-                badge.className = `badge ${data.valid ? "badge-valid" : "badge-invalid"}`;
-                badge.textContent = data.valid ? "✓ HỢP LỆ" : "✕ KHÔNG HỢP LỆ";
-                document.getElementById("rDocumentId").textContent = data.document_id || "-";
-                document.getElementById("rStatus").textContent = data.status || "-";
-                document.getElementById("rHashMatch").textContent = data.hash_matched ? "✓ Có" : "✕ Không";
-                document.getElementById("rSigValid").textContent = data.signature_valid ? "✓ Có" : "✕ Không";
-                document.getElementById("rAlgorithm").textContent = data.algorithm || "-";
-                document.getElementById("rSignedAt").textContent = data.signed_at ? new Date(data.signed_at).toLocaleString("vi-VN") : "-";
+                if (!res.ok && !data.reason) {
+                    throw new Error(data.message || "Không thể xác minh tài liệu");
+                }
+
+                // Hiển thị thông báo lỗi phù hợp với từng lý do thất bại
+                if (!data.valid) {
+                    let msg;
+                    if (data.hash_matched === false) {
+                        msg = "⚠️ Hồ sơ đã bị sửa đổi sau khi ký số!";
+                    } else if (data.reason === "INVALID_TOKEN") {
+                        msg = "Token xác minh không hợp lệ hoặc đã hết hạn.";
+                    } else if (data.reason === "DOCUMENT_NOT_FOUND") {
+                        msg = "Không tìm thấy hồ sơ.";
+                    } else if (data.reason === "DOCUMENT_NOT_ACTIVE") {
+                        msg = "Hồ sơ chưa được ký số.";
+                    } else {
+                        msg = "Xác minh thất bại: " + (data.reason || "lỗi không xác định");
+                    }
+                    errorEl.textContent = msg;
+                    errorEl.style.display = "block";
+                }
+
+                // Hiển thị chi tiết kết quả nếu có dữ liệu trả về
+                if (data.document_id) {
+                    resultEl.style.display = "block";
+                    const badge = document.getElementById("resultBadge");
+                    badge.className = `badge ${data.valid ? "badge-valid" : "badge-invalid"}`;
+                    badge.textContent = data.valid ? "✓ HỢP LỆ" : "✕ KHÔNG HỢP LỆ";
+                    document.getElementById("rDocumentId").textContent = data.document_id || "-";
+                    document.getElementById("rStatus").textContent = data.status || "-";
+                    document.getElementById("rHashMatch").textContent = data.hash_matched ? "✓ Có" : "✕ Không";
+                    document.getElementById("rSigValid").textContent = data.signature_valid ? "✓ Có" : "✕ Không";
+                    document.getElementById("rAlgorithm").textContent = data.algorithm || "-";
+                    document.getElementById("rSignedAt").textContent = data.signed_at ? new Date(data.signed_at).toLocaleString("vi-VN") : "-";
+                }
             } catch (err) {
                 errorEl.textContent = err.message;
                 errorEl.style.display = "block";

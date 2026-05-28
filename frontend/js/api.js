@@ -56,8 +56,11 @@ async function apiFetch(path, options = {}) {
     const res = await fetch(url, { ...options, headers });
 
     if (res.status === 401) {
-        logout();
-        return null;
+        if (getToken()) {
+            logout();
+            return null;
+        }
+        // Không có token → đang ở trang login/register, để lỗi nổi lên bình thường
     }
 
     return res;

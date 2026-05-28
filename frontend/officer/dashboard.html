@@ -12,6 +12,8 @@
         <a href="../index.html" class="logo">Cổng Dịch vụ công <span>Quốc gia</span></a>
         <nav>
             <a href="../index.html">Dịch vụ công</a>
+            <a id="navThutuc" href="../officer/dashboard.html">Thủ tục hành chính</a>
+            <a href="../index.html#news">Tin tức</a>
             <a href="../verify.html">Xác minh</a>
             <div id="navAuth"></div>
         </nav>
@@ -78,12 +80,19 @@
     </main>
 
     <div id="detailModal" class="modal-overlay" style="display:none">
-        <div class="card" style="width:min(90vw,700px)">
-            <div class="card-header">
+        <div class="card" style="width:min(95vw,900px);max-height:90vh;display:flex;flex-direction:column">
+            <div class="card-header" style="flex-shrink:0">
                 <h2 id="detailTitle">Chi tiết hồ sơ</h2>
                 <button onclick="closeDetail()" class="btn btn-sm btn-outline">Đóng</button>
             </div>
-            <div id="detailContent"></div>
+            <div style="flex:1;overflow-y:auto;padding:16px 24px;display:flex;flex-direction:column;gap:16px">
+                <div id="detailContent"></div>
+                <div>
+                    <div style="font-weight:600;margin-bottom:8px;font-size:14px;color:var(--gray-600)">Xem trước nội dung hồ sơ</div>
+                    <iframe id="pdfPreviewFrame" style="width:100%;height:520px;border:1px solid var(--gray-200);border-radius:6px;background:#f5f5f5"></iframe>
+                </div>
+            </div>
+            <div id="detailActions" style="flex-shrink:0;padding:16px 24px;border-top:1px solid var(--gray-200);display:flex;gap:12px;justify-content:flex-end"></div>
         </div>
     </div>
 
@@ -175,13 +184,57 @@
                         <div class="detail-label">Hash</div>
                         <div class="detail-value" style="font-size:12px">${doc.file_hash || "-"}</div>
                         <div class="detail-label">Chữ ký</div>
-                        <div class="detail-value" style="font-size:12px;word-break:break-all">${(doc.signature || "-").substring(0, 80)}...</div>
+                        <div class="detail-value" style="font-size:12px;word-break:break-all">
+                            ${doc.signature && doc.signature.length > 70 ? `
+                                <span id="sigShort">${doc.signature.substring(0, 70)}... <a href="#" onclick="event.preventDefault();document.getElementById('sigShort').style.display='none';document.getElementById('sigFull').style.display='inline'" style="font-size:11px">Xem thêm</a></span>
+                                <span id="sigFull" style="display:none">${doc.signature} <a href="#" onclick="event.preventDefault();document.getElementById('sigFull').style.display='none';document.getElementById('sigShort').style.display='inline'" style="font-size:11px">Thu gọn</a></span>
+                            ` : (doc.signature || "-")}
+                        </div>
                         <div class="detail-label">Verify URL</div>
                         <div class="detail-value"><a href="${doc.verify_url}" target="_blank">${doc.verify_url || "-"}</a></div>
                         ` : ""}
                     </div>
                 `;
+
+                // Nút hành động trong modal
+                const actions = document.getElementById("detailActions");
+                let actionBtns = `<button onclick="closeDetail()" class="btn btn-sm btn-outline">Đóng</button>`;
+                if (doc.status === "submitted") {
+                    actionBtns += `<button onclick="signDocFromModal('${doc.document_id}')" class="btn btn-sm btn-success">Ký số</button>`;
+                }
+                if (doc.status === "issued" && doc.verify_url) {
+                    try {
+                        const token = new URL(doc.verify_url).searchParams.get("token");
+                        if (token) {
+                            const verifyLink = `../verify.html?id=${encodeURIComponent(doc.document_id)}&token=${encodeURIComponent(token)}`;
+                            actionBtns += `<a href="${verifyLink}" target="_blank" class="btn btn-sm btn-outline">Xác minh tài liệu</a>`;
+                        }
+                    } catch (_) {}
+                }
+                actions.innerHTML = actionBtns;
+
+                // Load PDF vào iframe
+                const frame = document.getElementById("pdfPreviewFrame");
+                frame.src = "";
                 document.getElementById("detailModal").style.display = "flex";
+                try {
+                    const pdfUrl = await apiBlobUrl(`/app/documents/${docId}/download`);
+                    frame.src = pdfUrl;
+                } catch (_) {
+                    frame.srcdoc = '<p style="padding:16px;color:#888">Không thể tải xem trước PDF.</p>';
+                }
+            } catch (err) {
+                showAlert(err.message, "error");
+            }
+        }
+
+        async function signDocFromModal(docId) {
+            if (!confirm(`Xác nhận ký số hồ sơ ${docId}?`)) return;
+            closeDetail();
+            try {
+                const res = await apiPost(`/app/documents/${docId}/sign`, {});
+                showAlert(`Ký số thành công! Hồ sơ ${res.documentInfo.document_id}`, "success");
+                loadPending();
             } catch (err) {
                 showAlert(err.message, "error");
             }
@@ -204,7 +257,26 @@
 
         async function downloadDocument(docId) {
             try {
-                await apiDownload(`/app/documents/${docId}/signed-pdf`, `${docId}-signed.pdf`);
+                const res = await apiFetch(`/app/documents/${docId}/signed-pdf`);
+                if (!res) return;
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    if (data.tampered) {
+                        showAlert("⚠️ Không thể tải xuống: File PDF đã bị sửa đổi sau khi ký số. Vui lòng thông báo với người dân.", "error");
+                    } else {
+                        showAlert(data.message || "Tải xuống thất bại", "error");
+                    }
+                    return;
+                }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `${docId}-signed.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
             } catch (err) {
                 showAlert(err.message, "error");
             }

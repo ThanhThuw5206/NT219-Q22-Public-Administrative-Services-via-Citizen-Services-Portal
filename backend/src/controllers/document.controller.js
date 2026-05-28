@@ -22,6 +22,7 @@ import {
     signDocument,
     verifyDocument
 } from "../services/document.service1.js";
+import { hashFile } from "../crypto/hash.service.js";
 import {
     validateCT01
 } from "../validators/ct01.validator.js";
@@ -293,6 +294,15 @@ export const downloadSignedDocument = async (req, res) => {
 
         if (!signedFile || !fs.existsSync(signedFile.filePath)) {
             return res.status(404).json({ message: "Signed PDF not found" });
+        }
+
+        // Kiểm tra tính toàn vẹn: so sánh hash hiện tại với hash lúc ký
+        const currentHash = await hashFile(signedFile.filePath);
+        if (currentHash !== document.file_hash) {
+            return res.status(403).json({
+                message: "Tải xuống bị từ chối: file PDF đã bị sửa đổi sau khi ký số. Vui lòng liên hệ cơ quan có thẩm quyền.",
+                tampered: true
+            });
         }
 
         res.download(signedFile.filePath, signedFile.fileName);
