@@ -72,13 +72,13 @@ export const processDocument = async (input) => {
         signature_provider: null
     });
 
-    const qrPath = await generateQrCode({ documentId, verifyUrl, token });
+    const qrPath = await generateQrCode({ documentId, verifyUrl, token, status: "issued", ownerName: "" });
 
     const signedPath = await embedQrIntoPdf({
         sourceFilePath: originalPdfPath,
         qrPath,
         outputFilePath: path.join(documentFolder, "signed.pdf"),
-        metadata: { documentId, verifyUrl, issuedAt }
+        metadata: { document_id: documentId, verify_url: verifyUrl, issued_at: issuedAt, status: "issued", owner_name: "" }
     });
 
     const signedHash = await hashFile(signedPath);
@@ -102,7 +102,7 @@ export const processDocument = async (input) => {
         public_key_id: activeKey.key_id,
         token_hash: hashText(token),
         verify_url: verifyUrl,
-        qr_payload: { documentId, verifyUrl, token },
+        qr_payload: { document_id: documentId, verify_url: verifyUrl, token, status: "issued", owner_name: "" },
         signed_at: issuedAt
     });
 
@@ -349,8 +349,15 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
     const token = generateVerificationToken();
     const verifyUrl = buildVerifyUrl(documentId, token);
 
+    // Look up owner name for QR payload
+    let ownerName = "";
+    try {
+        const owner = await getUserById(document.owner_id);
+        if (owner) ownerName = owner.full_name;
+    } catch (_) { /* ignore if not found */ }
+
     // 1. Generate QR
-    const qrImagePath = await generateQrCode({ documentId, verifyUrl, token });
+    const qrImagePath = await generateQrCode({ documentId, verifyUrl, token, status: "issued", ownerName });
 
     // 2. Embed QR + metadata into original PDF → signed.pdf
     const signedFilePath = await embedQrIntoPdf({
@@ -362,7 +369,9 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
             verify_url: verifyUrl,
             algorithm: activeKey.algorithm,
             key_id: activeKey.key_id,
-            issued_at: issuedAt
+            issued_at: issuedAt,
+            status: "issued",
+            owner_name: ownerName
         }
     });
 
@@ -396,7 +405,9 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
         qr_payload: {
             document_id: documentId,
             verify_url: verifyUrl,
-            token
+            token,
+            status: "issued",
+            owner_name: ownerName
         }
     });
 

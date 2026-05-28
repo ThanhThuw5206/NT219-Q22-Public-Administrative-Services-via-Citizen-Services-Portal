@@ -1,0 +1,20 @@
+{
+  "document_id": "HS-2026-E72C8F6D",
+  "owner_id": 3,
+  "original_name": "CT01.pdf",
+  "file_path": "E:\\Project_MMH\\NT219-Q22-Public-Administrative-Services-via-Citizen-Services-Portal\\backend\\storage\\documents\\HS-2026-E72C8F6D\\original.pdf",
+  "original_file_hash": "d31c99635f53f2ab3410387e969e0e8d861d751eab11ab17ee1cd638561515dc",
+  "status": "submitted",
+  "created_at": "2026-05-27T12:20:56.073Z",
+  "signature": "",
+  "file_hash": "d31c99635f53f2ab3410387e969e0e8d861d751eab11ab17ee1cd638561515dc",
+  "token_hash": "8d348c000fca23ffb36c9598cf3adc73f1452632ab1cc2ff84dd82111c897426",
+  "public_key_id": 0,
+  "signed_at": null,
+  "signature_payload": null,
+  "signed_pdf_path": null,
+  "verify_url": null,
+  "qr_payload": null,
+  "algorithm": null,
+  "signature_provider": null
+}

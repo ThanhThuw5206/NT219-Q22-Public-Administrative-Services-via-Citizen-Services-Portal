@@ -15,7 +15,8 @@
  *       border      : 1 point
  *       padding     : 8 points (internal)
  *       font        : Helvetica 9pt
- *       lines       : Document ID, Verify URL, Algorithm, Key ID, Issued at
+ *       lines       : Document ID, Verify URL, Algorithm, Key ID, Issued at,
+ *                     Status, Owner
  *       overflow    : `verify_url` is visually truncated with an ellipsis
  *                     if it exceeds the inner width at 9pt.
  *
@@ -44,6 +45,8 @@
  *       When `metadata` is omitted, ONLY the QR is drawn (no metadata box) —
  *       this preserves the existing production call shape. The QR is always
  *       placed on the LAST page (the bug fix applies to both code paths).
+ *       Metadata now supports 7 fields: document_id, verify_url, algorithm,
+ *       key_id, issued_at, status, owner_name.
  *   - PdfEmbedderError -> typed error class
  */
 
@@ -70,7 +73,9 @@ const META_LABELS = [
     "Verify URL",
     "Algorithm",
     "Key ID",
-    "Issued at"
+    "Issued at",
+    "Status",
+    "Owner"
 ];
 
 /**
@@ -172,7 +177,9 @@ const drawMetadataBox = (page, font, metadata) => {
         `${META_LABELS[1]}: ${metadata.verify_url ?? ""}`,
         `${META_LABELS[2]}: ${metadata.algorithm ?? ""}`,
         `${META_LABELS[3]}: ${metadata.key_id ?? ""}`,
-        `${META_LABELS[4]}: ${metadata.issued_at ?? ""}`
+        `${META_LABELS[4]}: ${metadata.issued_at ?? ""}`,
+        `${META_LABELS[5]}: ${metadata.status ?? ""}`,
+        `${META_LABELS[6]}: ${metadata.owner_name ?? ""}`
     ];
 
     const boxWidth = META_MIN_WIDTH;
@@ -244,7 +251,7 @@ const validateMetadataShape = (metadata) => {
     if (metadata === null || typeof metadata !== "object") {
         throw new PdfEmbedderError(
             "PDF_EMBED_FAILED",
-            "metadata must be an object with document_id, verify_url, algorithm, key_id, issued_at"
+            "metadata must be an object with document_id, verify_url, algorithm, key_id, issued_at, status, owner_name"
         );
     }
 };
@@ -260,8 +267,8 @@ const validateMetadataShape = (metadata) => {
  * @param {string} input.qrImagePath
  *        Absolute path to the QR PNG to embed.
  * @param {Object} input.metadata
- *        `{document_id, verify_url, algorithm, key_id, issued_at}`. All five
- *        fields are required; missing values are rendered as empty strings.
+ *        `{document_id, verify_url, algorithm, key_id, issued_at, status, owner_name}`.
+ *        All fields are optional; missing values are rendered as empty strings.
  * @returns {Promise<Buffer>} The modified PDF as a Node Buffer.
  * @throws {PdfEmbedderError}
  */
@@ -428,7 +435,7 @@ export const validatePDF = async (pdfBytes) => {
  * @param {string} input.sourceFilePath
  * @param {string} input.qrPath
  * @param {string} input.outputFilePath
- * @param {Object} [input.metadata] Optional `{document_id, verify_url, algorithm, key_id, issued_at}`.
+ * @param {Object} [input.metadata] Optional `{document_id, verify_url, algorithm, key_id, issued_at, status, owner_name}`.
  * @returns {Promise<string>} The `outputFilePath` that was written.
  * @throws {PdfEmbedderError}
  */

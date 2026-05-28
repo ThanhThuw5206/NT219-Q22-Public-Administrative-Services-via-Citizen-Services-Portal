@@ -219,7 +219,8 @@ const mysqlAuth = {
 };
 
 // Xuất khẩu: tự động chọn chế độ JSON hoặc MySQL dựa trên DB_STORAGE_TYPE
-export const register = isMySQL ? mysqlAuth.register : jsonAuth.register;
-export const login = isMySQL ? mysqlAuth.login : jsonAuth.login;
-export const getUserById = isMySQL ? mysqlAuth.getUserById : jsonAuth.getUserById;
-export const seedDefaultUsers = isMySQL ? mysqlAuth.seedDefaultUsers : jsonAuth.seedDefaultUsers;
+const auth = isMySQL ? mysqlAuth : jsonAuth;
+export const register = auth.register.bind(auth);
+export const login = auth.login.bind(auth);
+export const getUserById = auth.getUserById.bind(auth);
+export const seedDefaultUsers = auth.seedDefaultUsers.bind(auth);

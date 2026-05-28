@@ -1,5 +1,5 @@
-/** URL gốc của backend API */
-const API_BASE = "http://localhost:3000/api";
+/** URL gốc của backend API - tự động dùng hostname hiện tại */
+const API_BASE = `${window.location.origin}/api`;
 
 /** Lấy JWT token từ localStorage */
 function getToken() {
