@@ -26,6 +26,7 @@ import { hashFile } from "../crypto/hash.service.js";
 import {
     validateCT01
 } from "../validators/ct01.validator.js";
+import { saveMembersForDocument } from "../repositories/household_members.repository.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -145,6 +146,12 @@ export const submitDocumentHandler = async (req, res) => {
             ownerId: req.user.id,
             ipAddress: req.ip
         });
+
+        // Lưu thành viên hộ gia đình nếu có
+        const members = req.body.members;
+        if (Array.isArray(members) && members.length > 0) {
+            await saveMembersForDocument(preview.document_id, members);
+        }
 
         res.status(201).json({
             message: "CT01 submitted successfully",

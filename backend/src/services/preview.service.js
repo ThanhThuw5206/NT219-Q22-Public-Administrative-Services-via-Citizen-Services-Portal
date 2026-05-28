@@ -113,10 +113,29 @@ export const createPreviewDocument = async (data) => {
     page.drawText(data.request_content || "", {
         ...textConfig,
         x: 200,
-        y: 440, 
+        y: 440,
         maxWidth: 500,
         lineHeight: 16
     });
+
+    // 11. Thành viên trong hộ gia đình cùng thay đổi
+    // rowStartY: hàng dữ liệu ĐẦU TIÊN (không phải header bảng trong template)
+    // Nếu vẫn lệch, điều chỉnh rowStartY: tăng → lên cao, giảm → xuống thấp hơn
+    const members = Array.isArray(data.members) ? data.members : [];
+    const rowStartY = 313;
+    const rowHeight  = 20.2;
+    const colX = { stt: 83, full_name: 110, birth_date: 248, gender: 325, personal_id: 372, relationship: 470 };
+
+    members.slice(0, 8).forEach((m, i) => {
+        const y = rowStartY - i * rowHeight;
+        page.drawText(String(i + 1), { ...textConfig, x: colX.stt, y });
+        page.drawText(m.full_name || "", { ...textConfig, x: colX.full_name, y, maxWidth: 170 });
+        page.drawText(m.birth_date || "", { ...textConfig, x: colX.birth_date, y, maxWidth: 84 });
+        page.drawText(m.gender || "", { ...textConfig, x: colX.gender, y, maxWidth: 36 });
+        page.drawText(m.personal_id || "", { ...textConfig, x: colX.personal_id, y, maxWidth: 86 });
+        page.drawText(m.relationship_to_head || "", { ...textConfig, x: colX.relationship, y, maxWidth: 100 });
+    });
+
     //------------------------------------------
     const pdfBytes = await pdfDoc.save();
 
