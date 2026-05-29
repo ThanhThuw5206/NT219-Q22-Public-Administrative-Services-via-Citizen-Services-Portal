@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import db from "../config/db.js";
-import { JWT_SECRET, JWT_EXPIRES_IN, DB_STORAGE_TYPE } from "../config/env.config.js";
+import { JWT_SECRET, JWT_EXPIRES_IN, DB_STORAGE_TYPE, IS_DEV } from "../config/env.config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDirectory = path.resolve(__dirname, "../data");
@@ -98,6 +98,7 @@ const jsonAuth = {
         return safe;
     },
     async seedDefaultUsers() {
+        if (!IS_DEV) return; // Never seed default credentials in production
         const users = this.readUsers();
         if (users.length > 0) return;
         const officerHash = await bcrypt.hash("officer123", 10);
@@ -194,6 +195,7 @@ const mysqlAuth = {
         };
     },
     async seedDefaultUsers() {
+        if (!IS_DEV) return; // Never seed default credentials in production
         const [rows] = await db.query("SELECT id FROM users LIMIT 1");
         if (rows.length > 0) return;
         const officerHash = await bcrypt.hash("officer123", 10);

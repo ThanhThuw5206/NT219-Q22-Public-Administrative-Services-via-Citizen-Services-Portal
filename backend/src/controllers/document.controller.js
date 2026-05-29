@@ -27,6 +27,32 @@ import {
     validateCT01
 } from "../validators/ct01.validator.js";
 import { saveMembersForDocument } from "../repositories/household_members.repository.js";
+import { validateFilePath } from "../utils/path-validator.util.js";
+import { IS_DEV } from "../config/env.config.js";
+
+/**
+ * Safe error responses for document endpoints.
+ * In production, don't leak internal error details.
+ */
+function safeError(res, error, statusCode = 500) {
+    if (IS_DEV) {
+        return res.status(statusCode).json({ message: error.message });
+    }
+    // Known safe error messages
+    const safeMessages = [
+        "Document not found",
+        "Preview not found",
+        "Preview expired",
+        "Preview file not found",
+        "File not found",
+        "Signed PDF not found",
+        "Cannot sign document with status",
+    ];
+    if (safeMessages.some(m => error.message.includes(m))) {
+        return res.status(statusCode).json({ message: error.message });
+    }
+    return res.status(statusCode).json({ message: "An error occurred" });
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -99,7 +125,7 @@ export const previewDocument = async (req, res) => {
             data: result
         });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        safeError(res, error);
     }
 };
 
@@ -158,7 +184,7 @@ export const submitDocumentHandler = async (req, res) => {
             data: result
         });
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        safeError(res, err);
     }
 };
 
@@ -181,7 +207,7 @@ export const signDocumentHandler = async (req, res) => {
         });
     } catch (error) {
         const status = error.message.includes("not found") ? 404 : 400;
-        res.status(status).json({ message: error.message });
+        safeError(res, error, status);
     }
 };
 
@@ -197,7 +223,7 @@ export const listDocumentDetails = async (req, res) => {
         }
         res.json(await getDocumentsByOwner(req.user.id));
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        safeError(res, error);
     }
 };
 
@@ -207,7 +233,7 @@ export const listPendingDocuments = async (req, res) => {
         const documents = await getDocumentsByStatus("submitted");
         res.json(documents);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        safeError(res, error);
     }
 };
 
@@ -217,7 +243,7 @@ export const listIssuedDocuments = async (req, res) => {
         const documents = await getDocumentsByStatus("issued");
         res.json(documents);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        safeError(res, error);
     }
 };
 
@@ -240,7 +266,7 @@ export const getDocumentDetail = async (req, res) => {
 
         res.json(document);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        safeError(res, error);
     }
 };
 
@@ -262,13 +288,25 @@ export const downloadDocumentFile = async (req, res) => {
         }
 
         const fileInfo = await getDocumentFile(req.params.documentId);
-        if (!fileInfo || !fs.existsSync(fileInfo.filePath)) {
+        if (!fileInfo) {
             return res.status(404).json({ message: "File not found" });
         }
 
-        res.download(fileInfo.filePath, fileInfo.fileName);
+        // Validate path to prevent traversal
+        let safePath;
+        try {
+            safePath = validateFilePath(fileInfo.filePath, uploadDirectory);
+        } catch {
+            return res.status(403).json({ message: "Invalid file path" });
+        }
+
+        if (!fs.existsSync(safePath)) {
+            return res.status(404).json({ message: "File not found" });
+        }
+
+        res.download(safePath, fileInfo.fileName);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        safeError(res, error);
     }
 };
 
@@ -299,22 +337,34 @@ export const downloadSignedDocument = async (req, res) => {
 
         const signedFile = await getSignedDocumentFile(req.params.documentId);
 
-        if (!signedFile || !fs.existsSync(signedFile.filePath)) {
+        if (!signedFile) {
+            return res.status(404).json({ message: "Signed PDF not found" });
+        }
+
+        // Validate path to prevent traversal
+        let safePath;
+        try {
+            safePath = validateFilePath(signedFile.filePath, uploadDirectory);
+        } catch {
+            return res.status(403).json({ message: "Invalid file path" });
+        }
+
+        if (!fs.existsSync(safePath)) {
             return res.status(404).json({ message: "Signed PDF not found" });
         }
 
         // Kiểm tra tính toàn vẹn: so sánh hash hiện tại với hash lúc ký
-        const currentHash = await hashFile(signedFile.filePath);
+        const currentHash = await hashFile(safePath);
         if (currentHash !== document.file_hash) {
             return res.status(403).json({
-                message: "Tải xuống bị từ chối: file PDF đã bị sửa đổi sau khi ký số. Vui lòng liên hệ cơ quan có thẩm quyền.",
+                message: "Download denied: PDF was modified after signing. Please contact the authority.",
                 tampered: true
             });
         }
 
-        res.download(signedFile.filePath, signedFile.fileName);
+        res.download(safePath, signedFile.fileName);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        safeError(res, error);
     }
 };
 
@@ -334,13 +384,25 @@ export const downloadPreviewDocument = async (req, res) => {
             return res.status(403).json({ message: "You do not have access to this preview" });
         }
 
-        if (!preview.preview_path || !fs.existsSync(preview.preview_path)) {
+        if (!preview.preview_path) {
             return res.status(404).json({ message: "Preview file not found" });
         }
 
-        res.sendFile(path.resolve(preview.preview_path));
+        // Validate path to prevent traversal attacks
+        let safePath;
+        try {
+            safePath = validateFilePath(preview.preview_path, uploadDirectory);
+        } catch {
+            return res.status(403).json({ message: "Invalid file path" });
+        }
+
+        if (!fs.existsSync(safePath)) {
+            return res.status(404).json({ message: "Preview file not found" });
+        }
+
+        res.sendFile(safePath);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        safeError(res, error);
     }
 };
 
@@ -359,7 +421,7 @@ export const verifyDocumentByQr = async (req, res) => {
         });
         res.status(result.valid ? 200 : 400).json(result);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        safeError(res, error);
     }
 };
 
@@ -382,16 +444,18 @@ export const verifyDocumentByUpload = (req, res) => {
             });
             res.status(result.valid ? 200 : 400).json(result);
         } catch (error) {
-            res.status(500).json({ message: error.message });
+            safeError(res, error);
         }
     });
 };
 
 // ---------------------------------------------------------------------------
-// Upload (legacy - officer upload trực tiếp)
+// Upload (DEPRECATED - use preview + submit + sign flow instead)
 // ---------------------------------------------------------------------------
 
+/** @deprecated Use previewDocument → submitDocumentHandler → signDocumentHandler */
 export const uploadDocument = (req, res) => {
+    console.warn("[deprecated] POST /upload is deprecated. Use preview → submit → sign flow.");
     upload.single("file")(req, res, async function (err) {
         if (err) {
             return res.status(400).json({ message: err.message || "Upload error" });
@@ -412,19 +476,18 @@ export const uploadDocument = (req, res) => {
                 documentInfo: result
             });
         } catch (error) {
-            res.status(500).json({
-                message: "Document signing failed",
-                reason: error.message
-            });
+            safeError(res, error);
         }
     });
 };
 
 // ---------------------------------------------------------------------------
-// Issue (legacy - officer tạo và ký ngay từ preview)
+// Issue (DEPRECATED - use preview + submit + sign flow instead)
 // ---------------------------------------------------------------------------
 
+/** @deprecated Use submitDocumentHandler → signDocumentHandler */
 export const issueDocument = async (req, res) => {
+    console.warn("[deprecated] POST /issue is deprecated. Use submit → sign flow.");
     try {
         const preview = await getPreviewById(req.body.preview_id);
 
@@ -440,7 +503,7 @@ export const issueDocument = async (req, res) => {
             return res.status(400).json({ message: "Preview file not found" });
         }
 
-        // Submit rồi ký ngay (flow legacy: citizen + officer cùng lúc)
+        // Submit then sign immediately (legacy flow)
         await submitDocument({
             documentId: preview.document_id,
             filePath: preview.preview_path,
@@ -460,6 +523,6 @@ export const issueDocument = async (req, res) => {
             documentInfo: result
         });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        safeError(res, error);
     }
 };

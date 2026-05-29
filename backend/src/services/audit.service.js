@@ -3,10 +3,10 @@ import path from "path";
 import db from "../config/db.js";
 import { DB_STORAGE_TYPE } from "../config/env.config.js";
 
-// Đường dẫn file JSON dùng để lưu log cố định khi chạy ở chế độ 'json'
+// JSON file path for 'json' storage mode
 const jsonFilePath = path.resolve("src/data/audit_logs.json");
 
-// Hàm bổ trợ đảm bảo thư mục và file JSON luôn tồn tại
+// Ensure directory and file exist
 const ensureJsonFile = () => {
     const dir = path.dirname(jsonFilePath);
     if (!fs.existsSync(dir)) {
@@ -18,7 +18,7 @@ const ensureJsonFile = () => {
 };
 
 // ==========================================
-// CHẾ ĐỘ LƯU TRỮ BẰNG FILE JSON (Persistence)
+// JSON FILE STORAGE
 // ==========================================
 const jsonAudit = {
     readLogs() {
@@ -39,17 +39,23 @@ const jsonAudit = {
 };
 
 // ==========================================
-// CHẾ ĐỘ LƯU TRỮ BẰNG DATABASE MYSQL
+// MYSQL STORAGE
 // ==========================================
-const LOG_TABLE_NAME = "audit_logs"; 
+
+// Whitelist of valid table names to prevent SQL injection
+const VALID_TABLES = new Set(["audit_logs"]);
+const LOG_TABLE_NAME = VALID_TABLES.has(process.env.AUDIT_TABLE)
+    ? process.env.AUDIT_TABLE
+    : "audit_logs";
 
 const mysqlAudit = {
     async writeLog(entry) {
+        // Table name is from whitelist — safe to interpolate
         const query = `
             INSERT INTO ${LOG_TABLE_NAME} (user_id, action, document_id, ip_address, result)
             VALUES (?, ?, ?, ?, ?)
         `;
-        
+
         await db.query(query, [
             entry.user_id || null,
             entry.action,
@@ -64,9 +70,8 @@ const mysqlAudit = {
         const query = `SELECT * FROM ${LOG_TABLE_NAME} ORDER BY created_at DESC`;
         const [rows] = await db.query(query);
         return rows.map(row => {
-            // Khôi phục trường details từ chuỗi JSON trong DB thành Object
             if (row.details && typeof row.details === "string") {
-                try { row.details = JSON.parse(row.details); } catch(e){}
+                try { row.details = JSON.parse(row.details); } catch(e) {}
             }
             return row;
         });

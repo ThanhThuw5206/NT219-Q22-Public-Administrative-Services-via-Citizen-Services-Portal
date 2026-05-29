@@ -72,9 +72,8 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 /**
- * Cập nhật thanh điều hướng dựa trên trạng thái đăng nhập.
- * - Đã đăng nhập: hiển thị Dashboard, tên người dùng, vai trò, nút Đăng xuất
- * - Chưa đăng nhập: hiển thị nút Đăng nhập, Đăng ký
+ * Update navigation based on login state.
+ * Uses textContent instead of innerHTML to prevent XSS.
  */
 function updateNav() {
     const navAuth = document.getElementById("navAuth");
@@ -92,14 +91,39 @@ function updateNav() {
             navThutuc.href = dashboardPath;
         }
 
-        navAuth.innerHTML = `
-            <span class="nav-user">${user.full_name} (${role})</span>
-            <button onclick="logout()" class="btn btn-sm btn-danger">Đăng xuất</button>
-        `;
+        // Clear existing content
+        navAuth.textContent = "";
+
+        // Create user info span (safe: textContent prevents XSS)
+        const userSpan = document.createElement("span");
+        userSpan.className = "nav-user";
+        userSpan.textContent = `${user.full_name} (${role})`;
+
+        // Create logout button
+        const logoutBtn = document.createElement("button");
+        logoutBtn.className = "btn btn-sm btn-danger";
+        logoutBtn.textContent = "Đăng xuất";
+        logoutBtn.addEventListener("click", logout);
+
+        navAuth.appendChild(userSpan);
+        navAuth.appendChild(logoutBtn);
     } else {
-        navAuth.innerHTML = `
-            <a href="/login.html" class="btn btn-sm btn-primary">Đăng nhập</a>
-            <a href="/register.html" class="btn btn-sm btn-outline">Đăng ký</a>
-        `;
+        // Clear existing content
+        navAuth.textContent = "";
+
+        // Create login link
+        const loginLink = document.createElement("a");
+        loginLink.href = "/login.html";
+        loginLink.className = "btn btn-sm btn-primary";
+        loginLink.textContent = "Đăng nhập";
+
+        // Create register link
+        const registerLink = document.createElement("a");
+        registerLink.href = "/register.html";
+        registerLink.className = "btn btn-sm btn-outline";
+        registerLink.textContent = "Đăng ký";
+
+        navAuth.appendChild(loginLink);
+        navAuth.appendChild(registerLink);
     }
 }

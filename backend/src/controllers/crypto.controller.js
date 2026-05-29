@@ -15,6 +15,7 @@ import {
     getActiveKey,
 } from "../crypto/signature.service.js";
 import * as auditService from "../services/audit.service.js";
+import { IS_DEV } from "../config/env.config.js";
 
 /**
  * Defensive audit helper — works regardless of which audit methods exist.
@@ -31,6 +32,17 @@ function logAudit({ keyId, userId, ipAddress, accessType, result, details }) {
             ipAddress
         });
     }
+}
+
+/**
+ * Safe error messages for crypto endpoints.
+ * Don't leak internal error details in production.
+ */
+function getSafeCryptoError(error, operation) {
+    if (IS_DEV) {
+        return { message: `${operation} failed`, reason: error.message };
+    }
+    return { message: `${operation} failed` };
 }
 
 /**
@@ -80,10 +92,7 @@ export const cryptoSign = async (req, res) => {
             result: "fail"
         });
 
-        return res.status(500).json({
-            message: "Signing failed",
-            reason: error.message,
-        });
+        return res.status(500).json(getSafeCryptoError(error, "Signing"));
     }
 };
 
@@ -132,10 +141,7 @@ export const cryptoVerify = async (req, res) => {
             details: { error: error.message },
         });
 
-        return res.status(500).json({
-            message: "Verification failed",
-            reason: error.message,
-        });
+        return res.status(500).json(getSafeCryptoError(error, "Verification"));
     }
 };
 
@@ -166,9 +172,6 @@ export const cryptoGetPublicKey = async (req, res) => {
             created_at: activeKey.created_at,
         });
     } catch (error) {
-        return res.status(500).json({
-            message: "Failed to load active signing key",
-            reason: error.message,
-        });
+        return res.status(500).json(getSafeCryptoError(error, "Load public key"));
     }
 };
