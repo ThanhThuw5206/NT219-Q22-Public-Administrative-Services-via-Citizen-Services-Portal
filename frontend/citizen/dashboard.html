@@ -125,7 +125,9 @@
                             </tbody>
                         </table>
                     </div>
-                    <button type="button" onclick="addMemberRow()" class="btn btn-outline btn-sm" style="margin-bottom:16px">+ Thêm thành viên</button>
+                    <div class="member-action-row">
+                        <button type="button" onclick="addMemberRow()" class="btn btn-outline btn-sm">+ Thêm thành viên</button>
+                    </div>
 
                     <div style="display:flex;gap:12px;flex-wrap:wrap">
                         <button type="button" id="btnPreview" class="btn btn-outline btn-lg">Xem trước</button>
@@ -235,18 +237,18 @@
             tr.id = `member-row-${idx}`;
             tr.innerHTML = `
                 <td style="text-align:center">${idx}</td>
-                <td><input type="text" class="m-full_name" placeholder="Họ và tên" style="width:100%"></td>
-                <td><input type="text" class="m-birth_date" placeholder="dd/mm/yyyy" style="width:100%"></td>
+                <td><input type="text" class="m-full_name" placeholder="Họ và tên"></td>
+                <td><input type="text" class="m-birth_date" placeholder="dd/mm/yyyy"></td>
                 <td>
-                    <select class="m-gender" style="width:100%">
+                    <select class="m-gender">
                         <option value="Nam">Nam</option>
                         <option value="Nữ">Nữ</option>
                         <option value="Khác">Khác</option>
                     </select>
                 </td>
-                <td><input type="text" class="m-personal_id" placeholder="12 chữ số" style="width:100%"></td>
-                <td><input type="text" class="m-relationship" placeholder="VD: Vợ, Con..." style="width:100%"></td>
-                <td><button type="button" onclick="removeMemberRow('member-row-${idx}')" style="background:none;border:none;cursor:pointer;color:var(--danger,#e53e3e);font-size:16px">✕</button></td>
+                <td><input type="text" class="m-personal_id" placeholder="12 chữ số"></td>
+                <td><input type="text" class="m-relationship" placeholder="VD: Vợ, Con..."></td>
+                <td><button type="button" onclick="removeMemberRow('member-row-${idx}')" class="member-remove-btn" title="Xóa thành viên">×</button></td>
             `;
             tbody.appendChild(tr);
             currentPreviewId = null;

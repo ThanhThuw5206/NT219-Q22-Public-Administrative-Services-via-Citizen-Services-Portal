@@ -1,19 +1,14 @@
 /**
  * QR Generator Service
  * --------------------
- * Generates a QR code (PNG) that encodes a snake_case JSON payload used by the
- * public verification flow. The payload contract is intentionally snake_case
- * to match the on-the-wire shape consumed by `/api/public/documents/verify`
- * (see Requirement 2.5: decoded JSON contains exactly three fields
- * `document_id`, `verify_url`, `token`).
+ * Generates a QR code (PNG) that encodes a small public JSON payload. Keep this
+ * payload intentional because most QR scanner apps show it directly to users.
  *
- * Encoded payload:
+ * Encoded QR payload:
  *   {
  *     "document_id": "HS-2026-A1B2C3D4",
- *     "verify_url":  "{base_url}/{document_id}?token={token}",
- *     "token":       "<verification token>",
- *     "status":      "issued",
- *     "owner_name":  "Nguyen Van A"
+ *     "verify_url": "{base_url}/{document_id}?token={token}",
+ *     "status": "issued"
  *   }
  *
  * QR encoding parameters (Requirement 2.1, 2.2, 2.3):
@@ -47,6 +42,7 @@ import { createDocumentFolder } from "../utils/storage.util.js";
 const DEFAULT_WIDTH = 300;
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 500;
+const DEFAULT_QR_PAYLOAD_FIELDS = ["document_id", "verify_url", "status"];
 
 /**
  * Typed error for the QR Generator Service.
@@ -118,6 +114,39 @@ const validateWidth = (width) => {
     return width;
 };
 
+const normalizePayloadFields = () => {
+    const allowedFields = new Set([
+        "document_id",
+        "verify_url",
+        "token",
+        "status",
+        "owner_name"
+    ]);
+
+    const configuredFields = (process.env.QR_PAYLOAD_FIELDS || "")
+        .split(",")
+        .map((field) => field.trim())
+        .filter(Boolean)
+        .filter((field) => allowedFields.has(field));
+
+    return configuredFields.length > 0 ? configuredFields : DEFAULT_QR_PAYLOAD_FIELDS;
+};
+
+const buildQrPayload = ({ documentId, verifyUrl, token, status, ownerName }) => {
+    const source = {
+        document_id: documentId,
+        verify_url: verifyUrl,
+        token,
+        status: status || "issued",
+        owner_name: ownerName || ""
+    };
+
+    return normalizePayloadFields().reduce((payload, field) => {
+        payload[field] = source[field];
+        return payload;
+    }, {});
+};
+
 const ensureQrFolder = (documentId) => {
     let documentFolder;
     try {
@@ -183,14 +212,13 @@ export const generateQR = async ({
     const qrFolder = ensureQrFolder(documentId);
     const qrPath = path.resolve(path.join(qrFolder, "qr.png"));
 
-    // Snake_case payload — Requirement 2.5 / Property 4
-    const qrData = JSON.stringify({
-        document_id: documentId,
-        verify_url: verifyUrl,
+    const qrData = JSON.stringify(buildQrPayload({
+        documentId,
+        verifyUrl,
         token,
-        status: status || "issued",
-        owner_name: ownerName || ""
-    });
+        status,
+        ownerName
+    }));
 
     // Pick the smallest version >= 5 that fits the payload at error
     // correction level H. The qrcode lib will not auto-promote when
