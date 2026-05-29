@@ -450,6 +450,69 @@ td { border-bottom: 1px solid var(--gray-200); color: var(--gray-700); }
 tr:last-child td { border-bottom: 0; }
 tr:hover td { background: var(--primary-50); }
 
+#membersTable {
+    min-width: 880px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: white;
+}
+
+#membersTable th {
+    background: #f1f6fb;
+    color: var(--ink);
+}
+
+#membersTable td {
+    vertical-align: middle;
+    background: white;
+}
+
+#membersTable input,
+#membersTable select {
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    color: var(--gray-800);
+    background: var(--gray-50);
+    font: inherit;
+    font-size: 13px;
+}
+
+#membersTable input:focus,
+#membersTable select:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: white;
+    box-shadow: 0 0 0 3px rgba(0, 47, 108, 0.09);
+}
+
+.member-action-row {
+    display: flex;
+    justify-content: flex-end;
+    margin: 12px 0 18px;
+}
+
+.member-remove-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid #f0c6c6;
+    border-radius: var(--radius);
+    background: #fff6f6;
+    color: var(--danger);
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.member-remove-btn:hover {
+    background: var(--danger);
+    color: white;
+}
+
 /* ===== Status, tabs, alerts ===== */
 .badge {
     display: inline-flex;
