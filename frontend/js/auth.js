@@ -1,3 +1,7 @@
+/**
+ * auth.js - Xử lý đăng nhập, đăng ký và điều hướng thanh điều hướng.
+ * Tự động gắn sự kiện cho form login/register nếu tồn tại trên trang.
+ */
 document.addEventListener("DOMContentLoaded", () => {
     const loginForm = document.getElementById("loginForm");
     const registerForm = document.getElementById("registerForm");
@@ -67,19 +71,28 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 });
 
+/**
+ * Cập nhật thanh điều hướng dựa trên trạng thái đăng nhập.
+ * - Đã đăng nhập: hiển thị Dashboard, tên người dùng, vai trò, nút Đăng xuất
+ * - Chưa đăng nhập: hiển thị nút Đăng nhập, Đăng ký
+ */
 function updateNav() {
     const navAuth = document.getElementById("navAuth");
+    const navThutuc = document.getElementById("navThutuc");
     if (!navAuth) return;
 
     const user = getUser();
     if (user) {
         const role = user.roles[0];
-        const dashboard = role === "officer" || role === "admin"
+        const dashboardPath = role === "officer" || role === "admin"
             ? "/officer/dashboard.html"
             : "/citizen/dashboard.html";
 
+        if (navThutuc) {
+            navThutuc.href = dashboardPath;
+        }
+
         navAuth.innerHTML = `
-            <a href="${dashboard}" class="btn btn-sm btn-outline">Dashboard</a>
             <span class="nav-user">${user.full_name} (${role})</span>
             <button onclick="logout()" class="btn btn-sm btn-danger">Đăng xuất</button>
         `;

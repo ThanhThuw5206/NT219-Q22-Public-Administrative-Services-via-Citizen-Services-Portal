@@ -12,6 +12,8 @@
         <a href="../index.html" class="logo">Cổng Dịch vụ công <span>Quốc gia</span></a>
         <nav>
             <a href="../index.html">Dịch vụ công</a>
+            <a id="navThutuc" href="../citizen/dashboard.html">Thủ tục hành chính</a>
+            <a href="../index.html#news">Tin tức</a>
             <a href="../verify.html">Xác minh</a>
             <div id="navAuth"></div>
         </nav>
@@ -103,6 +105,27 @@
                         <label>Nội dung *</label>
                         <textarea name="request_content" required rows="3" placeholder="Đăng ký tạm trú phục vụ..."></textarea>
                     </div>
+
+                    <h3 class="form-section-title">Thành viên trong hộ gia đình cùng thay đổi</h3>
+                    <div class="table-wrap" style="margin-bottom:8px">
+                        <table id="membersTable">
+                            <thead>
+                                <tr>
+                                    <th style="width:36px">TT</th>
+                                    <th>Họ, chữ đệm và tên</th>
+                                    <th style="width:130px">Ngày, tháng, năm sinh</th>
+                                    <th style="width:80px">Giới tính</th>
+                                    <th style="width:130px">Số định danh cá nhân</th>
+                                    <th>Mối quan hệ với chủ hộ</th>
+                                    <th style="width:40px"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="membersBody">
+                                <tr id="membersEmpty"><td colspan="7" style="text-align:center;color:var(--gray-400);font-size:13px;padding:10px">Chưa có thành viên. Nhấn "Thêm" để bổ sung.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button type="button" onclick="addMemberRow()" class="btn btn-outline btn-sm" style="margin-bottom:16px">+ Thêm thành viên</button>
 
                     <div style="display:flex;gap:12px;flex-wrap:wrap">
                         <button type="button" id="btnPreview" class="btn btn-outline btn-lg">Xem trước</button>
@@ -200,6 +223,62 @@
             loadMyDocs();
         }
 
+        let memberCount = 0;
+
+        function addMemberRow() {
+            const tbody = document.getElementById("membersBody");
+            const empty = document.getElementById("membersEmpty");
+            if (empty) empty.remove();
+            memberCount++;
+            const idx = memberCount;
+            const tr = document.createElement("tr");
+            tr.id = `member-row-${idx}`;
+            tr.innerHTML = `
+                <td style="text-align:center">${idx}</td>
+                <td><input type="text" class="m-full_name" placeholder="Họ và tên" style="width:100%"></td>
+                <td><input type="text" class="m-birth_date" placeholder="dd/mm/yyyy" style="width:100%"></td>
+                <td>
+                    <select class="m-gender" style="width:100%">
+                        <option value="Nam">Nam</option>
+                        <option value="Nữ">Nữ</option>
+                        <option value="Khác">Khác</option>
+                    </select>
+                </td>
+                <td><input type="text" class="m-personal_id" placeholder="12 chữ số" style="width:100%"></td>
+                <td><input type="text" class="m-relationship" placeholder="VD: Vợ, Con..." style="width:100%"></td>
+                <td><button type="button" onclick="removeMemberRow('member-row-${idx}')" style="background:none;border:none;cursor:pointer;color:var(--danger,#e53e3e);font-size:16px">✕</button></td>
+            `;
+            tbody.appendChild(tr);
+            currentPreviewId = null;
+        }
+
+        function removeMemberRow(rowId) {
+            const row = document.getElementById(rowId);
+            if (row) row.remove();
+            if (document.getElementById("membersBody").children.length === 0) {
+                document.getElementById("membersBody").innerHTML =
+                    '<tr id="membersEmpty"><td colspan="7" style="text-align:center;color:var(--gray-400);font-size:13px;padding:10px">Chưa có thành viên. Nhấn "Thêm" để bổ sung.</td></tr>';
+            }
+            currentPreviewId = null;
+        }
+
+        function getMembers() {
+            return Array.from(document.querySelectorAll("#membersBody tr[id^='member-row-']")).map(tr => {
+                const raw = tr.querySelector(".m-birth_date").value.trim();
+                // Chuyển dd/mm/yyyy → yyyy-mm-dd cho DB
+                let birth_date = raw;
+                const parts = raw.split("/");
+                if (parts.length === 3) birth_date = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                return {
+                    full_name: tr.querySelector(".m-full_name").value.trim(),
+                    birth_date,
+                    gender: tr.querySelector(".m-gender").value,
+                    personal_id: tr.querySelector(".m-personal_id").value.trim(),
+                    relationship_to_head: tr.querySelector(".m-relationship").value.trim()
+                };
+            }).filter(m => m.full_name);
+        }
+
         function getFormData() {
             const f = document.getElementById("submitForm");
             return {
@@ -215,7 +294,8 @@
                 email: f.email.value.trim(),
                 householder_name: f.householder_name.value.trim(),
                 householder_id: f.householder_id.value.trim(),
-                relationship: f.relationship.value.trim()
+                relationship: f.relationship.value.trim(),
+                members: getMembers()
             };
         }
 
@@ -228,17 +308,21 @@
                     tbody.innerHTML = '<tr><td colspan="4" class="empty-state"><p>Chưa có hồ sơ nào</p></td></tr>';
                     return;
                 }
-                tbody.innerHTML = all.map(doc => `
+                tbody.innerHTML = all.map(doc => {
+                    const statusLabel = doc.status === "issued" ? "Đã ký" : doc.status === "submitted" ? "Chờ duyệt" : doc.status;
+                    const verifyToken = doc.verify_url ? new URL(doc.verify_url).searchParams.get("token") : null;
+                    const verifyLink = verifyToken ? `../verify.html?id=${doc.document_id}&token=${verifyToken}` : "#";
+                    return `
                     <tr>
                         <td><strong>${doc.document_id}</strong></td>
-                        <td><span class="badge badge-${doc.status}">${doc.status === "issued" ? "Đã ký" : doc.status === "submitted" ? "Chờ duyệt" : doc.status}</span></td>
+                        <td><span class="badge badge-${doc.status}">${statusLabel}</span></td>
                         <td>${new Date(doc.created_at).toLocaleString("vi-VN")}</td>
                         <td>
                             ${doc.status === "issued" ? `<button onclick="downloadDocument('${doc.document_id}')" class="btn btn-sm btn-primary">Tải PDF</button>` : ""}
-                            <a href="../verify.html?token=" class="btn btn-sm btn-outline" onclick="event.preventDefault();alert('Token: ${doc.verify_url ? new URL(doc.verify_url).searchParams.get('token') || 'N/A' : 'N/A'}')">Xem token</a>
+                            ${verifyToken ? `<a href="${verifyLink}" class="btn btn-sm btn-outline">Xác minh</a>` : ""}
                         </td>
-                    </tr>
-                `).join("");
+                    </tr>`;
+                }).join("");
             } catch (err) {
                 console.error(err);
             }
@@ -250,7 +334,26 @@
 
         async function downloadDocument(docId) {
             try {
-                await apiDownload(`/app/documents/${docId}/signed-pdf`, `${docId}-signed.pdf`);
+                const res = await apiFetch(`/app/documents/${docId}/signed-pdf`);
+                if (!res) return;
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    if (data.tampered) {
+                        showAlert("⚠️ Không thể tải xuống: File PDF đã bị sửa đổi sau khi ký số. Vui lòng liên hệ cơ quan có thẩm quyền.", "error");
+                    } else {
+                        showAlert(data.message || "Tải xuống thất bại", "error");
+                    }
+                    return;
+                }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `${docId}-signed.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
             } catch (err) {
                 showAlert(err.message, "error");
             }

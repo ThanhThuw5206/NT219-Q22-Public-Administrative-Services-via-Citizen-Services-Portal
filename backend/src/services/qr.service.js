@@ -11,7 +11,9 @@
  *   {
  *     "document_id": "HS-2026-A1B2C3D4",
  *     "verify_url":  "{base_url}/{document_id}?token={token}",
- *     "token":       "<verification token>"
+ *     "token":       "<verification token>",
+ *     "status":      "issued",
+ *     "owner_name":  "Nguyen Van A"
  *   }
  *
  * QR encoding parameters (Requirement 2.1, 2.2, 2.3):
@@ -64,7 +66,7 @@ export class QrServiceError extends Error {
 const isNonEmptyString = (value) =>
     typeof value === "string" && value.trim().length > 0;
 
-const validatePayload = ({ documentId, verifyUrl, token }) => {
+const validatePayload = ({ documentId, verifyUrl, token, status, ownerName }) => {
     if (!isNonEmptyString(documentId)) {
         throw new QrServiceError(
             "INVALID_PAYLOAD",
@@ -81,6 +83,18 @@ const validatePayload = ({ documentId, verifyUrl, token }) => {
         throw new QrServiceError(
             "INVALID_PAYLOAD",
             "token must be a non-empty string"
+        );
+    }
+    if (status && !isNonEmptyString(status)) {
+        throw new QrServiceError(
+            "INVALID_PAYLOAD",
+            "status must be a non-empty string when provided"
+        );
+    }
+    if (ownerName && !isNonEmptyString(ownerName)) {
+        throw new QrServiceError(
+            "INVALID_PAYLOAD",
+            "ownerName must be a non-empty string when provided"
         );
     }
 };
@@ -149,6 +163,8 @@ const removePartialFile = (filePath) => {
  * @param {string} input.documentId  - Document identifier, e.g. "HS-2026-A1B2C3D4"
  * @param {string} input.verifyUrl   - Full verification URL with token query param
  * @param {string} input.token       - Verification token (raw, not hashed)
+ * @param {string} [input.status]    - Document status, e.g. "issued"
+ * @param {string} [input.ownerName] - Owner's full name
  * @param {number} [input.width=300] - QR pixel width, must be in [180, 500]
  * @returns {Promise<string>} Absolute path to the generated qr.png
  * @throws {QrServiceError}
@@ -157,9 +173,11 @@ export const generateQR = async ({
     documentId,
     verifyUrl,
     token,
+    status,
+    ownerName,
     width
 } = {}) => {
-    validatePayload({ documentId, verifyUrl, token });
+    validatePayload({ documentId, verifyUrl, token, status, ownerName });
     const resolvedWidth = validateWidth(width);
 
     const qrFolder = ensureQrFolder(documentId);
@@ -169,7 +187,9 @@ export const generateQR = async ({
     const qrData = JSON.stringify({
         document_id: documentId,
         verify_url: verifyUrl,
-        token
+        token,
+        status: status || "issued",
+        owner_name: ownerName || ""
     });
 
     // Pick the smallest version >= 5 that fits the payload at error
@@ -217,7 +237,9 @@ export const generateQR = async ({
  * @param {string} input.documentId
  * @param {string} input.verifyUrl
  * @param {string} input.token
+ * @param {string} [input.status]
+ * @param {string} [input.ownerName]
  * @returns {Promise<string>} Absolute path to the generated qr.png
  */
-export const generateQrCode = async ({ documentId, verifyUrl, token } = {}) =>
-    generateQR({ documentId, verifyUrl, token, width: DEFAULT_WIDTH });
+export const generateQrCode = async ({ documentId, verifyUrl, token, status, ownerName } = {}) =>
+    generateQR({ documentId, verifyUrl, token, status, ownerName, width: DEFAULT_WIDTH });

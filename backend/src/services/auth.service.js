@@ -12,6 +12,27 @@ const dataFilePath = path.join(dataDirectory, "users.json");
 
 const isMySQL = DB_STORAGE_TYPE === "mysql";
 
+/** Regex kiểm tra định dạng email cơ bản */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Kiểm tra dữ liệu đầu vào khi đăng ký tài khoản.
+ * - full_name: tối thiểu 2 ký tự
+ * - email: phải đúng định dạng
+ * - password: tối thiểu 6 ký tự
+ */
+function validateRegistrationInput({ full_name, email, password }) {
+    if (!full_name || typeof full_name !== "string" || full_name.trim().length < 2) {
+        throw new Error("Full name must be at least 2 characters");
+    }
+    if (!email || !EMAIL_RE.test(email)) {
+        throw new Error("Invalid email format");
+    }
+    if (!password || typeof password !== "string" || password.length < 6) {
+        throw new Error("Password must be at least 6 characters");
+    }
+}
+
 // ==========================================
 // CHẾ ĐỘ FILE JSON (Cũ của nhóm)
 // ==========================================
@@ -30,6 +51,7 @@ const jsonAuth = {
         return users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
     },
     async register({ full_name, email, password }) {
+        validateRegistrationInput({ full_name, email, password });
         const users = this.readUsers();
         if (users.find(u => u.email === email)) {
             throw new Error("Email already registered");
@@ -109,6 +131,7 @@ const jsonAuth = {
 // ==========================================
 const mysqlAuth = {
     async register({ full_name, email, password }) {
+        validateRegistrationInput({ full_name, email, password });
         const [existing] = await db.query("SELECT id FROM users WHERE email = ?", [email]);
         if (existing.length > 0) {
             throw new Error("Email already registered");
@@ -195,8 +218,9 @@ const mysqlAuth = {
     }
 };
 
-// Xuất khẩu cầu nối điều hướng
-export const register = isMySQL ? mysqlAuth.register : jsonAuth.register;
-export const login = isMySQL ? mysqlAuth.login : jsonAuth.login;
-export const getUserById = isMySQL ? mysqlAuth.getUserById : jsonAuth.getUserById;
-export const seedDefaultUsers = isMySQL ? mysqlAuth.seedDefaultUsers : jsonAuth.seedDefaultUsers;
+// Xuất khẩu: tự động chọn chế độ JSON hoặc MySQL dựa trên DB_STORAGE_TYPE
+const auth = isMySQL ? mysqlAuth : jsonAuth;
+export const register = auth.register.bind(auth);
+export const login = auth.login.bind(auth);
+export const getUserById = auth.getUserById.bind(auth);
+export const seedDefaultUsers = auth.seedDefaultUsers.bind(auth);

@@ -1,3 +1,7 @@
+/**
+ * document.controller.js - Điều khiển các endpoint quản lý tài liệu.
+ * Bao gồm: xem trước, nộp hồ sơ, ký số, xác minh, tải file, danh sách.
+ */
 import fs from "fs";
 import path from "path";
 import multer from "multer";
@@ -18,9 +22,11 @@ import {
     signDocument,
     verifyDocument
 } from "../services/document.service1.js";
+import { hashFile } from "../crypto/hash.service.js";
 import {
     validateCT01
 } from "../validators/ct01.validator.js";
+import { saveMembersForDocument } from "../repositories/household_members.repository.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,6 +37,7 @@ if (!fs.existsSync(uploadFolder)) {
     fs.mkdirSync(uploadFolder, { recursive: true });
 }
 
+/** Cấu hình multer: chỉ chấp nhận file PDF, lưu vào thư mục uploads */
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         fs.mkdirSync(uploadDirectory, { recursive: true });
@@ -50,11 +57,13 @@ const pdfOnly = (req, file, cb) => {
 
 const upload = multer({ storage, fileFilter: pdfOnly });
 
+/** Kiểm tra người dùng có phải officer/admin (quản lý tất cả hồ sơ) */
 const canManageAllDocuments = (user) => {
     const roles = user?.roles || [];
     return roles.includes("officer") || roles.includes("admin");
 };
 
+/** Kiểm tra người dùng có quyền truy cập tài liệu (là chủ sở hữu hoặc officer/admin) */
 const canAccessDocument = (user, document) => {
     if (!user || !document) return false;
     if (canManageAllDocuments(user)) return true;
@@ -62,9 +71,10 @@ const canAccessDocument = (user, document) => {
 };
 
 // ---------------------------------------------------------------------------
-// Preview
+// Xem trước hồ sơ CT01
 // ---------------------------------------------------------------------------
 
+/** Tạo PDF xem trước từ dữ liệu form CT01 */
 export const previewDocument = async (req, res) => {
     try {
         req.body.cccd = req.body.cccd || req.body.citizen_id;
@@ -94,9 +104,10 @@ export const previewDocument = async (req, res) => {
 };
 
 // ---------------------------------------------------------------------------
-// Submit (Citizen nộp hồ sơ từ preview đã xác nhận)
+// Nộp hồ sơ (Citizen nộp từ preview đã xác nhận)
 // ---------------------------------------------------------------------------
 
+/** Công dân nộp hồ sơ: kiểm tra preview hợp lệ, chuyển trạng thái submitted */
 export const submitDocumentHandler = async (req, res) => {
     try {
         req.body.cccd = req.body.cccd || req.body.citizen_id;
@@ -136,6 +147,12 @@ export const submitDocumentHandler = async (req, res) => {
             ipAddress: req.ip
         });
 
+        // Lưu thành viên hộ gia đình nếu có
+        const members = req.body.members;
+        if (Array.isArray(members) && members.length > 0) {
+            await saveMembersForDocument(preview.document_id, members);
+        }
+
         res.status(201).json({
             message: "CT01 submitted successfully",
             data: result
@@ -146,9 +163,10 @@ export const submitDocumentHandler = async (req, res) => {
 };
 
 // ---------------------------------------------------------------------------
-// Sign (Officer ký số hồ sơ)
+// Ký số (Officer ký Falcon-512 và phát hành hồ sơ)
 // ---------------------------------------------------------------------------
 
+/** Cán bộ ký số hồ sơ: sinh QR, nhúng PDF, ký Falcon-512, chuyển issued */
 export const signDocumentHandler = async (req, res) => {
     try {
         const result = await signDocument({
@@ -168,9 +186,10 @@ export const signDocumentHandler = async (req, res) => {
 };
 
 // ---------------------------------------------------------------------------
-// List
+// Danh sách hồ sơ
 // ---------------------------------------------------------------------------
 
+/** Liệt kê hồ sơ: citizen thấy của mình, officer/admin thấy tất cả */
 export const listDocumentDetails = async (req, res) => {
     try {
         if (canManageAllDocuments(req.user)) {
@@ -182,6 +201,7 @@ export const listDocumentDetails = async (req, res) => {
     }
 };
 
+/** Liệt kê hồ sơ chờ ký (status = submitted) */
 export const listPendingDocuments = async (req, res) => {
     try {
         const documents = await getDocumentsByStatus("submitted");
@@ -191,6 +211,7 @@ export const listPendingDocuments = async (req, res) => {
     }
 };
 
+/** Liệt kê hồ sơ đã ký (status = issued) */
 export const listIssuedDocuments = async (req, res) => {
     try {
         const documents = await getDocumentsByStatus("issued");
@@ -201,9 +222,10 @@ export const listIssuedDocuments = async (req, res) => {
 };
 
 // ---------------------------------------------------------------------------
-// Detail
+// Chi tiết hồ sơ
 // ---------------------------------------------------------------------------
 
+/** Xem chi tiết một hồ sơ theo documentId */
 export const getDocumentDetail = async (req, res) => {
     try {
         const document = await getDocument(req.params.documentId);
@@ -223,9 +245,10 @@ export const getDocumentDetail = async (req, res) => {
 };
 
 // ---------------------------------------------------------------------------
-// Download
+// Tải file
 // ---------------------------------------------------------------------------
 
+/** Tải PDF gốc của hồ sơ */
 export const downloadDocumentFile = async (req, res) => {
     try {
         const document = await getDocument(req.params.documentId);
@@ -249,6 +272,7 @@ export const downloadDocumentFile = async (req, res) => {
     }
 };
 
+/** Tải PDF đã ký: cho phép qua JWT session hoặc verification token */
 export const downloadSignedDocument = async (req, res) => {
     try {
         const document = await getDocument(req.params.documentId);
@@ -279,12 +303,22 @@ export const downloadSignedDocument = async (req, res) => {
             return res.status(404).json({ message: "Signed PDF not found" });
         }
 
+        // Kiểm tra tính toàn vẹn: so sánh hash hiện tại với hash lúc ký
+        const currentHash = await hashFile(signedFile.filePath);
+        if (currentHash !== document.file_hash) {
+            return res.status(403).json({
+                message: "Tải xuống bị từ chối: file PDF đã bị sửa đổi sau khi ký số. Vui lòng liên hệ cơ quan có thẩm quyền.",
+                tampered: true
+            });
+        }
+
         res.download(signedFile.filePath, signedFile.fileName);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 };
 
+/** Tải file PDF xem trước (chỉ chủ sở hữu hoặc officer/admin) */
 export const downloadPreviewDocument = async (req, res) => {
     try {
         const preview = await getPreviewById(req.params.previewId);
@@ -311,9 +345,10 @@ export const downloadPreviewDocument = async (req, res) => {
 };
 
 // ---------------------------------------------------------------------------
-// Verify
+// Xác minh tài liệu
 // ---------------------------------------------------------------------------
 
+/** Xác minh qua QR: truyền documentId + token trên URL */
 export const verifyDocumentByQr = async (req, res) => {
     try {
         const result = await verifyDocument({
@@ -328,6 +363,7 @@ export const verifyDocumentByQr = async (req, res) => {
     }
 };
 
+/** Xác minh qua upload PDF: so sánh hash file upload với hash đã ký */
 export const verifyDocumentByUpload = (req, res) => {
     upload.single("file")(req, res, async function (err) {
         if (err) {

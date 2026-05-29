@@ -15,7 +15,8 @@
  *       border      : 1 point
  *       padding     : 8 points (internal)
  *       font        : Helvetica 9pt
- *       lines       : Document ID, Verify URL, Algorithm, Key ID, Issued at
+ *       lines       : Document ID, Verify URL, Algorithm, Key ID, Issued at,
+ *                     Status, Owner
  *       overflow    : `verify_url` is visually truncated with an ellipsis
  *                     if it exceeds the inner width at 9pt.
  *
@@ -44,6 +45,8 @@
  *       When `metadata` is omitted, ONLY the QR is drawn (no metadata box) —
  *       this preserves the existing production call shape. The QR is always
  *       placed on the LAST page (the bug fix applies to both code paths).
+ *       Metadata now supports 7 fields: document_id, verify_url, algorithm,
+ *       key_id, issued_at, status, owner_name.
  *   - PdfEmbedderError -> typed error class
  */
 
@@ -70,7 +73,9 @@ const META_LABELS = [
     "Verify URL",
     "Algorithm",
     "Key ID",
-    "Issued at"
+    "Issued at",
+    "Status",
+    "Owner"
 ];
 
 /**
@@ -112,6 +117,39 @@ const loadPdfDocument = async (pdfBytes) => {
         );
     }
 };
+
+// Helvetica uses WinAnsi encoding which cannot represent Vietnamese-specific
+// characters (e.g. ư U+01B0, ơ U+01A1, ă U+0103, đ U+0111). Transliterate
+// them to ASCII equivalents so pdf-lib never receives an unrepresentable codepoint.
+const VI_MAP = {
+    à:'a',á:'a',ả:'a',ã:'a',ạ:'a',
+    ă:'a',ặ:'a',ắ:'a',ằ:'a',ẳ:'a',ẵ:'a',
+    â:'a',ậ:'a',ấ:'a',ầ:'a',ẩ:'a',ẫ:'a',
+    è:'e',é:'e',ẻ:'e',ẽ:'e',ẹ:'e',
+    ê:'e',ệ:'e',ế:'e',ề:'e',ể:'e',ễ:'e',
+    ì:'i',í:'i',ỉ:'i',ĩ:'i',ị:'i',
+    ò:'o',ó:'o',ỏ:'o',õ:'o',ọ:'o',
+    ô:'o',ộ:'o',ố:'o',ồ:'o',ổ:'o',ỗ:'o',
+    ơ:'o',ợ:'o',ớ:'o',ờ:'o',ở:'o',ỡ:'o',
+    ù:'u',ú:'u',ủ:'u',ũ:'u',ụ:'u',
+    ư:'u',ự:'u',ứ:'u',ừ:'u',ử:'u',ữ:'u',
+    ỳ:'y',ý:'y',ỷ:'y',ỹ:'y',ỵ:'y',đ:'d',
+    À:'A',Á:'A',Ả:'A',Ã:'A',Ạ:'A',
+    Ă:'A',Ặ:'A',Ắ:'A',Ằ:'A',Ẳ:'A',Ẵ:'A',
+    Â:'A',Ậ:'A',Ấ:'A',Ầ:'A',Ẩ:'A',Ẫ:'A',
+    È:'E',É:'E',Ẻ:'E',Ẽ:'E',Ẹ:'E',
+    Ê:'E',Ệ:'E',Ế:'E',Ề:'E',Ể:'E',Ễ:'E',
+    Ì:'I',Í:'I',Ỉ:'I',Ĩ:'I',Ị:'I',
+    Ò:'O',Ó:'O',Ỏ:'O',Õ:'O',Ọ:'O',
+    Ô:'O',Ộ:'O',Ố:'O',Ồ:'O',Ổ:'O',Ỗ:'O',
+    Ơ:'O',Ợ:'O',Ớ:'O',Ờ:'O',Ở:'O',Ỡ:'O',
+    Ù:'U',Ú:'U',Ủ:'U',Ũ:'U',Ụ:'U',
+    Ư:'U',Ự:'U',Ứ:'U',Ừ:'U',Ử:'U',Ữ:'U',
+    Ỳ:'Y',Ý:'Y',Ỷ:'Y',Ỹ:'Y',Ỵ:'Y',Đ:'D'
+};
+
+const sanitizeForWinAnsi = (text) =>
+    String(text ?? "").replace(/[^\x20-\x7E\xA0-\xFF]/g, (ch) => VI_MAP[ch] ?? "?");
 
 /**
  * Truncate `text` so that its rendered width at `size` (using `font`) fits
@@ -168,11 +206,13 @@ const drawQrOnLastPage = (pdfDoc, qrImage) => {
 
 const drawMetadataBox = (page, font, metadata) => {
     const labelValues = [
-        `${META_LABELS[0]}: ${metadata.document_id ?? ""}`,
-        `${META_LABELS[1]}: ${metadata.verify_url ?? ""}`,
-        `${META_LABELS[2]}: ${metadata.algorithm ?? ""}`,
-        `${META_LABELS[3]}: ${metadata.key_id ?? ""}`,
-        `${META_LABELS[4]}: ${metadata.issued_at ?? ""}`
+        `${META_LABELS[0]}: ${sanitizeForWinAnsi(metadata.document_id)}`,
+        `${META_LABELS[1]}: ${sanitizeForWinAnsi(metadata.verify_url)}`,
+        `${META_LABELS[2]}: ${sanitizeForWinAnsi(metadata.algorithm)}`,
+        `${META_LABELS[3]}: ${sanitizeForWinAnsi(metadata.key_id)}`,
+        `${META_LABELS[4]}: ${sanitizeForWinAnsi(metadata.issued_at)}`,
+        `${META_LABELS[5]}: ${sanitizeForWinAnsi(metadata.status)}`,
+        `${META_LABELS[6]}: ${sanitizeForWinAnsi(metadata.owner_name)}`
     ];
 
     const boxWidth = META_MIN_WIDTH;
@@ -244,7 +284,7 @@ const validateMetadataShape = (metadata) => {
     if (metadata === null || typeof metadata !== "object") {
         throw new PdfEmbedderError(
             "PDF_EMBED_FAILED",
-            "metadata must be an object with document_id, verify_url, algorithm, key_id, issued_at"
+            "metadata must be an object with document_id, verify_url, algorithm, key_id, issued_at, status, owner_name"
         );
     }
 };
@@ -260,8 +300,8 @@ const validateMetadataShape = (metadata) => {
  * @param {string} input.qrImagePath
  *        Absolute path to the QR PNG to embed.
  * @param {Object} input.metadata
- *        `{document_id, verify_url, algorithm, key_id, issued_at}`. All five
- *        fields are required; missing values are rendered as empty strings.
+ *        `{document_id, verify_url, algorithm, key_id, issued_at, status, owner_name}`.
+ *        All fields are optional; missing values are rendered as empty strings.
  * @returns {Promise<Buffer>} The modified PDF as a Node Buffer.
  * @throws {PdfEmbedderError}
  */
@@ -428,7 +468,7 @@ export const validatePDF = async (pdfBytes) => {
  * @param {string} input.sourceFilePath
  * @param {string} input.qrPath
  * @param {string} input.outputFilePath
- * @param {Object} [input.metadata] Optional `{document_id, verify_url, algorithm, key_id, issued_at}`.
+ * @param {Object} [input.metadata] Optional `{document_id, verify_url, algorithm, key_id, issued_at, status, owner_name}`.
  * @returns {Promise<string>} The `outputFilePath` that was written.
  * @throws {PdfEmbedderError}
  */

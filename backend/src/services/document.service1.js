@@ -1,185 +1,84 @@
-//orchestrator
+/**
+ * document.service1.js - Điều phối nghiệp vụ tài liệu
+ * Xử lý toàn bộ vòng đời tài liệu: nộp hồ sơ → ký số → xác minh
+ */
 import crypto from "crypto";
 import fs from "fs";
 import { hashFile, hashText } from "../crypto/hash.service.js";
 import { saveDocument, updateDocument, findDocumentById, listDocuments } from "./document.repository.js";
 import { buildSignaturePayload, getActiveKey, signPayload, verifyPayloadSignature } from "../crypto/signature.service.js";
 import { writeAuditLog } from "./audit.service.js";
-//thêm mới so vs bản cũ
+import { getUserById } from "./auth.service.js";
 import path from "path";
 import fsExtra from "fs-extra";
 import { createDocumentFolder } from "../utils/storage.util.js";
 import { generateQrCode } from "./qr.service.js";
 import { embedQrIntoPdf } from "./pdf.service.js";
 
+/** Tạo mã hồ sơ duy nhất theo định dạng HS-{NĂM}-{8 ký tự UUID} */
 const generateDocumentId = () => {
     return `HS-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 };
 
+/** Tạo token xác minh ngẫu nhiên 32 bytes, mã hóa base64url */
 const generateVerificationToken = () => {
     return crypto.randomBytes(32).toString("base64url");
 };
 
+/** Tạo URL xác minh công khai từ PUBLIC_VERIFY_URL trong .env */
 const buildVerifyUrl = (documentId, token) => {
     const baseUrl = process.env.PUBLIC_VERIFY_URL || "http://localhost:3000/api/public/documents/verify";
     return `${baseUrl}/${documentId}?token=${token}`;
 };
 
-// export const processDocument = async (input) => {
-//     const {
-//         filePath,
-//         originalName,
-//         ownerId = "demo-citizen",
-//         ipAddress = null
-//     } = typeof input === "string" ? { filePath: input, originalName: input } : input;
-
-//     const documentId = input.documentId || generateDocumentId();
-//     const documentFolder = createDocumentFolder(documentId);
-    
-//     const issuedAt = new Date().toISOString();
-//     const token = generateVerificationToken();
-//     const activeKey = await getActiveKey();
-//     const verifyUrl = buildVerifyUrl(documentId, token);
-    
-//     const originalPdfPath = path.join(documentFolder, "original.pdf");
-
-//     await fsExtra.move(filePath, originalPdfPath, {
-//         overwrite: true
-//     });
-
-//     const originalFileHash = sha256File(originalPdfPath);
-
-//     const documentRecord = {
-//         document_id: documentId,
-//         owner_id: ownerId,
-//         original_name: originalName,
-//         file_path: originalPdfPath,
-//         original_file_hash: originalFileHash,
-//         algorithm: activeKey.algorithm,
-//         signature_provider: activeKey.provider,
-//         public_key_id: activeKey.key_id,
-//         public_key: activeKey.public_key,
-//         token_hash: sha256Text(token),
-//         verify_url: verifyUrl,
-//         qr_payload: {
-//             document_id: documentId,
-//             verify_url: verifyUrl,
-//             token
-//         },
-//         status: "issued",
-//         created_at: issuedAt,
-//         signed_at: issuedAt
-//     };
-
-//     // 1: GENERATE QR
-//     const qrImagePath = await generateQrCode({
-//         documentId,
-//         verifyUrl,
-//         token
-//     });
-
-//     // 2: EMBED QR INTO PDF
-//     const signedFilePath = await embedQrIntoPdf({
-//         sourceFilePath: originalPdfPath,
-//         qrPath: qrImagePath,
-//         outputFilePath: path.join(documentFolder, "signed.pdf"),
-//         metadata: {
-//             document_id: documentId,
-//             verify_url: verifyUrl,
-//             algorithm: activeKey.algorithm,
-//             key_id: activeKey.key_id,
-//             issued_at: issuedAt
-//         }
-//     });
-
-//     // HASH FINAL PDF
-//     documentRecord.signed_pdf_path = signedFilePath;
-//     documentRecord.file_hash = sha256File(signedFilePath);
-
-//     const payload = buildSignaturePayload({
-//         documentId,
-//         fileHash: documentRecord.file_hash,
-//         issuedAt,
-//         keyId: activeKey.key_id,
-//         version: 1
-//     });
-//     const signatureInfo = await signPayload(payload);
-
-//     documentRecord.signature = signatureInfo.signature;
-//     documentRecord.signature_payload = payload;
-//     documentRecord.algorithm = signatureInfo.algorithm;
-//     documentRecord.signature_provider = signatureInfo.provider;
-//     documentRecord.public_key_id = signatureInfo.key_id;
-
-//     // SỬA: Thêm await trước saveDocument vì đây là tác vụ DB bất đồng bộ
-//     const savedDocument = await saveDocument(documentRecord);
-    
-//     // TẠO METADATA FILE CHO MỖI DOCUMENT
-//     const metadataPath = path.join(documentFolder, "metadata.json");
-
-//     fs.writeFileSync(
-//         metadataPath,
-//         JSON.stringify(savedDocument, null, 2)
-//     );
-        
-//     writeAuditLog({
-//         action: "sign",
-//         documentId,
-//         actor: ownerId,
-//         ipAddress,
-//         result: "success",
-//         details: {
-//             algorithm: signatureInfo.algorithm,
-//             provider: signatureInfo.provider
-//         }
-//     });
-
-//     return {
-//         document_id: savedDocument.document_id,
-//         file_hash: savedDocument.file_hash,
-//         hash: savedDocument.file_hash,
-//         signature: savedDocument.signature,
-//         algorithm: savedDocument.algorithm,
-//         signature_provider: savedDocument.signature_provider,
-//         public_key_id: savedDocument.public_key_id,
-//         verify_url: savedDocument.verify_url,
-//         qr_payload: savedDocument.qr_payload,
-//         file_path: savedDocument.signed_pdf_path,
-//         signed_file: savedDocument.signed_pdf_path,
-//         original_file_hash: savedDocument.original_file_hash,
-//         signed_pdf_url: `/api/app/documents/${savedDocument.document_id}/signed-pdf`,
-//         status: savedDocument.status,
-//         signed_at: savedDocument.signed_at
-//     };
-// };
-
+/**
+ * Xử lý tài liệu trọn gói (legacy): nộp + ký số + sinh QR trong một bước.
+ * Dùng cho flow officer upload trực tiếp qua POST /upload.
+ * @param {Object} input - { filePath, documentId, originalName, ownerId, ipAddress }
+ * @returns {Object} Thông tin tài liệu đã ký
+ */
 export const processDocument = async (input) => {
-    const { filePath, documentId } = input;
+    const { filePath, documentId, originalName, ownerId, ipAddress } = input;
 
     const documentFolder = createDocumentFolder(documentId);
-
     const originalPdfPath = path.join(documentFolder, "original.pdf");
 
     await fsExtra.move(filePath, originalPdfPath, { overwrite: true });
 
     const fileHash = await hashFile(originalPdfPath);
-
     const activeKey = await getActiveKey();
-
     const issuedAt = new Date().toISOString();
     const token = generateVerificationToken();
-
     const verifyUrl = buildVerifyUrl(documentId, token);
 
-    // QR
-    const qrPath = await generateQrCode({ documentId, verifyUrl, token });
+    await saveDocument({
+        document_id: documentId,
+        owner_id: ownerId || "demo-citizen",
+        original_name: originalName || "document.pdf",
+        file_path: originalPdfPath,
+        original_file_hash: fileHash,
+        file_hash: fileHash,
+        status: "submitted",
+        created_at: issuedAt,
+        signature: "",
+        token_hash: "",
+        public_key_id: 0,
+        signed_at: null,
+        signature_payload: null,
+        signed_pdf_path: null,
+        verify_url: null,
+        qr_payload: null,
+        algorithm: null,
+        signature_provider: null
+    });
 
-    // PDF signed
+    const qrPath = await generateQrCode({ documentId, verifyUrl, token, status: "issued", ownerName: "" });
+
     const signedPath = await embedQrIntoPdf({
         sourceFilePath: originalPdfPath,
         qrPath,
         outputFilePath: path.join(documentFolder, "signed.pdf"),
-        metadata: { documentId, verifyUrl, issuedAt }
+        metadata: { document_id: documentId, verify_url: verifyUrl, issued_at: issuedAt, status: "issued", owner_name: "" }
     });
 
     const signedHash = await hashFile(signedPath);
@@ -188,7 +87,8 @@ export const processDocument = async (input) => {
         documentId,
         fileHash: signedHash,
         issuedAt,
-        keyId: activeKey.key_id
+        keyId: activeKey.key_id,
+        version: 1
     });
 
     const signature = await signPayload(payload);
@@ -202,17 +102,31 @@ export const processDocument = async (input) => {
         public_key_id: activeKey.key_id,
         token_hash: hashText(token),
         verify_url: verifyUrl,
-        qr_payload: { documentId, verifyUrl, token },
+        qr_payload: { document_id: documentId, verify_url: verifyUrl, token, status: "issued", owner_name: "" },
         signed_at: issuedAt
+    });
+
+    await writeAuditLog({
+        action: "sign",
+        documentId,
+        userId: ownerId,
+        ipAddress,
+        result: "success"
     });
 
     return saved;
 };
+
+/**
+ * Xác minh tính hợp lệ của tài liệu: kiểm tra token, hash file, chữ ký Falcon-512.
+ * @param {Object} params - { documentId, token, filePath (tùy chọn), userId, ipAddress }
+ * @returns {Object} Kết quả xác minh: valid, reason, hash_matched, signature_valid, ...
+ */
 export const verifyDocument = async ({ documentId, token, filePath = null, userId = null, ipAddress = null }) => {
     const document = await findDocumentById(documentId);
 
     if (!document) {
-        writeAuditLog({ action: "verify", documentId, userId, ipAddress, result: "fail" });
+        await writeAuditLog({ action: "verify", documentId, userId, ipAddress, result: "fail" });
         return {
             valid: false,
             reason: "DOCUMENT_NOT_FOUND"
@@ -220,7 +134,7 @@ export const verifyDocument = async ({ documentId, token, filePath = null, userI
     }
 
     if (document.token_hash !== hashText(token || "")) {
-        writeAuditLog({ action: "verify", documentId, userId, ipAddress, result: "fail" });
+        await writeAuditLog({ action: "verify", documentId, userId, ipAddress, result: "fail" });
         return {
             valid: false,
             reason: "INVALID_TOKEN"
@@ -228,7 +142,7 @@ export const verifyDocument = async ({ documentId, token, filePath = null, userI
     }
 
     if (document.status !== "issued") {
-        writeAuditLog({ action: "verify", documentId, userId, ipAddress, result: "fail" });
+        await writeAuditLog({ action: "verify", documentId, userId, ipAddress, result: "fail" });
         return {
             valid: false,
             reason: "DOCUMENT_NOT_ACTIVE",
@@ -270,7 +184,7 @@ export const verifyDocument = async ({ documentId, token, filePath = null, userI
     });
     const valid = hashMatched && signatureValid;
 
-    writeAuditLog({
+    await writeAuditLog({
         action: "verify",
         documentId,
         userId,
@@ -294,22 +208,31 @@ export const verifyDocument = async ({ documentId, token, filePath = null, userI
     };
 };
 
-// Thêm từ khóa async ở đầu hàm
+/** Lấy thông tin chi tiết một tài liệu theo documentId, bao gồm tên người nộp */
 export const getDocument = async (documentId) => {
-   const document = await findDocumentById(documentId); // Thêm từ khóa await tại đây
+    const document = await findDocumentById(documentId);
 
     if (!document) {
         return null;
     }
 
+    // Tra cứu tên người nộp từ bảng users
+    let owner_name = null;
+    try {
+        const owner = await getUserById(document.owner_id);
+        if (owner) owner_name = owner.full_name;
+    } catch (_) { /* bỏ qua nếu không tìm thấy */ }
+
     return {
         document_id: document.document_id,
         owner_id: document.owner_id,
+        owner_name,
         original_name: document.original_name,
         file_hash: document.file_hash,
         hash: document.file_hash,
         file_path: document.signed_pdf_path || document.file_path,
         original_file_hash: document.original_file_hash || null,
+        signature: document.signature || null,
         algorithm: document.algorithm,
         signature_provider: document.signature_provider,
         public_key_id: document.public_key_id,
@@ -321,12 +244,16 @@ export const getDocument = async (documentId) => {
     };
 };
 
+/** Lấy danh sách tài liệu thuộc về một công dân cụ thể */
 export const getDocumentsByOwner = async (ownerId) => {
-    const allDocs = await listDocuments(); // Thêm await trước listDocuments()
+    const allDocs = await listDocuments();
     const filteredDocs = allDocs.filter((doc) => doc.owner_id === ownerId);
-    return Promise.all(filteredDocs.map((doc) => getDocument(doc.document_id))); // Bọc Promise.all
+    const docs = await Promise.all(filteredDocs.map((doc) => getDocument(doc.document_id)));
+    docs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return docs;
 };
 
+/** Lấy đường dẫn file PDF đã ký để tải xuống */
 export const getSignedDocumentFile = async (documentId) => {
     const document = await findDocumentById(documentId);
 
@@ -341,9 +268,14 @@ export const getSignedDocumentFile = async (documentId) => {
 };
 
 // ---------------------------------------------------------------------------
-// New: Citizen-Officer workflow
+// Quy trình Citizen - Officer
 // ---------------------------------------------------------------------------
 
+/**
+ * Công dân nộp hồ sơ: lưu file PDF, tạo bản ghi trạng thái "submitted".
+ * @param {Object} params - { documentId, filePath, originalName, ownerId, ipAddress }
+ * @returns {Object} Thông tin hồ sơ đã nộp
+ */
 export const submitDocument = async ({ documentId, filePath, originalName, ownerId = "citizen", ipAddress = null }) => {
     const folder = createDocumentFolder(documentId);
     const originalPdfPath = path.join(folder, "original.pdf");
@@ -383,7 +315,7 @@ export const submitDocument = async ({ documentId, filePath, originalName, owner
         JSON.stringify(saved, null, 2)
     );
 
-    writeAuditLog({
+    await writeAuditLog({
         action: "submit",
         documentId,
         userId: ownerId,
@@ -398,8 +330,12 @@ export const submitDocument = async ({ documentId, filePath, originalName, owner
     };
 };
 
+/**
+ * Cán bộ ký số hồ sơ: sinh QR, nhúng vào PDF, ký Falcon-512, chuyển trạng thái "issued".
+ * @param {Object} params - { documentId, officerId, ipAddress }
+ * @returns {Object} Thông tin tài liệu đã ký và phát hành
+ */
 export const signDocument = async ({ documentId, officerId = "officer", ipAddress = null }) => {
-    // SỬA: Thêm await vì findDocumentById thực hiện truy vấn DB bất đồng bộ
     const document = await findDocumentById(documentId);
 
     if (!document) {
@@ -416,8 +352,15 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
     const token = generateVerificationToken();
     const verifyUrl = buildVerifyUrl(documentId, token);
 
+    // Look up owner name for QR payload
+    let ownerName = "";
+    try {
+        const owner = await getUserById(document.owner_id);
+        if (owner) ownerName = owner.full_name;
+    } catch (_) { /* ignore if not found */ }
+
     // 1. Generate QR
-    const qrImagePath = await generateQrCode({ documentId, verifyUrl, token });
+    const qrImagePath = await generateQrCode({ documentId, verifyUrl, token, status: "issued", ownerName });
 
     // 2. Embed QR + metadata into original PDF → signed.pdf
     const signedFilePath = await embedQrIntoPdf({
@@ -429,7 +372,9 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
             verify_url: verifyUrl,
             algorithm: activeKey.algorithm,
             key_id: activeKey.key_id,
-            issued_at: issuedAt
+            issued_at: issuedAt,
+            status: "issued",
+            owner_name: ownerName
         }
     });
 
@@ -447,7 +392,6 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
     const signatureInfo = await signPayload(payload);
 
     // 5. Update document record
-    // SỬA: Thêm await để đảm bảo dữ liệu cập nhật thành công vào DB trước khi dùng biến 'updated'
     const updated = await updateDocument(documentId, {
         status: "issued",
         signed_at: issuedAt,
@@ -464,7 +408,9 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
         qr_payload: {
             document_id: documentId,
             verify_url: verifyUrl,
-            token
+            token,
+            status: "issued",
+            owner_name: ownerName
         }
     });
 
@@ -475,7 +421,7 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
     );
 
     // 7. Audit
-    writeAuditLog({
+    await writeAuditLog({
         action: "sign",
         documentId,
         userId: officerId,
@@ -502,6 +448,7 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
     };
 };
 
+/** Lấy toàn bộ danh sách tài liệu (dành cho officer/admin) */
 export const getDocuments = async () => {
     const allDocs = await listDocuments();
     return Promise.all(
@@ -509,18 +456,25 @@ export const getDocuments = async () => {
     );
 };
 
+/** Lấy danh sách tài liệu theo trạng thái (submitted, issued, ...) */
 export const getDocumentsByStatus = async (status) => {
     const allDocs = await listDocuments();
     const filteredDocs = allDocs.filter((doc) => doc.status === status);
 
-    // Chạy song song gom chi tiết thông tin document
-    return Promise.all(
+    const docs = await Promise.all(
         filteredDocs.map((doc) => getDocument(doc.document_id))
     );
+
+    // Sắp xếp mới nhất lên đầu
+    const dateField = status === "issued" ? "signed_at" : "created_at";
+    docs.sort((a, b) => new Date(b[dateField]) - new Date(a[dateField]));
+
+    return docs;
 };
 
-export const getDocumentFile = async (documentId) => { // Thêm async ở đây
-    const document = await findDocumentById(documentId); // Thêm await ở đây
+/** Lấy đường dẫn file PDF (gốc hoặc đã ký) để tải xuống */
+export const getDocumentFile = async (documentId) => {
+    const document = await findDocumentById(documentId);
     if (!document) return null;
 
     const filePath = document.signed_pdf_path || document.file_path;

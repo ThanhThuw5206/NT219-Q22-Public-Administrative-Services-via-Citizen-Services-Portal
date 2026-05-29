@@ -5,7 +5,12 @@ import { DB_STORAGE_TYPE } from "../config/env.config.js";
 
 const toMySQL = (val) => {
     if (!val) return null;
-    return new Date(val).toISOString().slice(0, 19).replace("T", " ");
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return null;
+    const pad = n => String(n).padStart(2, "0");
+    // Dùng local-time methods để khớp với timezone của MySQL server (UTC+7)
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+           `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 };
 
 const jsonFilePath = path.resolve("src/data/documents.json");
