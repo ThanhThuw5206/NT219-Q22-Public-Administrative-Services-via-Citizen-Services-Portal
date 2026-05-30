@@ -20,6 +20,7 @@ import documentRoutes from "./routes/document.routes.js";
 import publicRoutes from "./routes/public.routes.js";
 import { ensureStorageFolders } from "./utils/storage.util.js";
 import { seedDefaultUsers } from "./services/auth.service.js";
+import { runMigrations } from "./db/migrate.js";
 import cors from "cors";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -35,6 +36,9 @@ app.use(securityHeaders);
 
 // Tạo thư mục storage nếu chưa có
 ensureStorageFolders();
+
+// Áp dụng migration DB tự động (idempotent, an toàn khi chạy lại)
+await runMigrations();
 
 // Tạo tài khoản mặc định (officer, admin) nếu database trống
 await seedDefaultUsers();

@@ -20,6 +20,7 @@ import {
     processDocument,
     submitDocument,
     signDocument,
+    rejectDocument,
     verifyDocument
 } from "../services/document.service1.js";
 import { hashFile } from "../crypto/hash.service.js";
@@ -218,6 +219,36 @@ export const listIssuedDocuments = async (req, res) => {
         res.json(documents);
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+/** Liệt kê hồ sơ đã từ chối (status = rejected) */
+export const listRejectedDocuments = async (req, res) => {
+    try {
+        const documents = await getDocumentsByStatus("rejected");
+        res.json(documents);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/** Cán bộ từ chối hồ sơ: yêu cầu lý do, chuyển trạng thái "rejected" */
+export const rejectDocumentHandler = async (req, res) => {
+    try {
+        const { reason } = req.body;
+        if (!reason || !reason.trim()) {
+            return res.status(400).json({ message: "Lý do từ chối là bắt buộc" });
+        }
+        const result = await rejectDocument({
+            documentId: req.params.documentId,
+            officerId: req.user?.id ? String(req.user.id) : "officer",
+            reason: reason.trim(),
+            ipAddress: req.ip
+        });
+        res.status(200).json({ message: "Hồ sơ đã bị từ chối", data: result });
+    } catch (error) {
+        const status = error.message.includes("not found") ? 404 : 400;
+        res.status(status).json({ message: error.message });
     }
 };
 
