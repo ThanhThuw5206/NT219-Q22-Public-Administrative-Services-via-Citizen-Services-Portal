@@ -1,9 +1,16 @@
 import express from "express";
-import cors from "cors";
+import cookieParser from "cookie-parser";
+import helmet from "helmet";
 
 const app = express();
 
-app.use(cors());
+// Security headers
+app.use(helmet({
+    contentSecurityPolicy: false, // Disable CSP for now (frontend uses inline scripts)
+    crossOriginEmbedderPolicy: false // Allow embedding
+}));
+
 app.use(express.json());
+app.use(cookieParser());
 
 export default app;

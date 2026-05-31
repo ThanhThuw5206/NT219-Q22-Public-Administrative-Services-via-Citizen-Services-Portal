@@ -18,10 +18,15 @@ function setAuth(token, user) {
     localStorage.setItem("user", JSON.stringify(user));
 }
 
-/** Xóa session và chuyển về trang đăng nhập */
+/** Clear session and redirect to login */
 function logout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    // Clear httpOnly cookie via backend (fire-and-forget)
+    fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include"
+    }).catch(() => {});
     window.location.href = "/login.html";
 }
 
@@ -37,8 +42,10 @@ function getUserRole() {
 }
 
 /**
- * Gọi API tự động đính kèm JWT token.
- * Tự động đăng xuất khi nhận lỗi 401 (token hết hạn).
+ * Call API with automatic auth.
+ * Sends httpOnly cookies automatically (credentials: "include").
+ * Falls back to Authorization header for backward compatibility.
+ * Auto-logout on 401 (expired token).
  */
 async function apiFetch(path, options = {}) {
     const token = getToken();
@@ -48,19 +55,25 @@ async function apiFetch(path, options = {}) {
         headers["Content-Type"] = "application/json";
     }
 
+    // Send token in header for backward compatibility
+    // (httpOnly cookie is sent automatically with credentials: "include")
     if (token) {
         headers["Authorization"] = `Bearer ${token}`;
     }
 
     const url = path.startsWith("/api/") ? path : `${API_BASE}${path}`;
-    const res = await fetch(url, { ...options, headers });
+    const res = await fetch(url, {
+        ...options,
+        headers,
+        credentials: "include" // Send cookies with every request
+    });
 
     if (res.status === 401) {
         if (getToken()) {
             logout();
             return null;
         }
-        // Không có token → đang ở trang login/register, để lỗi nổi lên bình thường
+        // No token → on login/register page, let error surface normally
     }
 
     return res;
