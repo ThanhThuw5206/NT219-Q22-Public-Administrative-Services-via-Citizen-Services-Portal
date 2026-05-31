@@ -116,6 +116,21 @@
             loadPending();
         }
 
+        function escapeHtml(value) {
+            return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;"
+            }[ch]));
+        }
+
+        function safeDate(value) {
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("vi-VN");
+        }
+
         async function loadPending() {
             try {
                 const docs = await apiGet("/app/documents/pending");
@@ -126,9 +141,9 @@
                 }
                 tbody.innerHTML = docs.map(doc => `
                     <tr>
-                        <td><strong>${doc.document_id}</strong></td>
-                        <td>${doc.owner_name || doc.owner_id || "-"}</td>
-                        <td>${new Date(doc.created_at).toLocaleString("vi-VN")}</td>
+                        <td><strong>${escapeHtml(doc.document_id)}</strong></td>
+                        <td>${escapeHtml(doc.owner_name || doc.owner_id || "-")}</td>
+                        <td>${escapeHtml(safeDate(doc.created_at))}</td>
                         <td>
                             <button onclick="viewDoc('${doc.document_id}')" class="btn btn-sm btn-outline">Xem</button>
                             <button onclick="signDoc('${doc.document_id}')" class="btn btn-sm btn-success">Ký số</button>
@@ -150,9 +165,9 @@
                 }
                 tbody.innerHTML = docs.map(doc => `
                     <tr>
-                        <td><strong>${doc.document_id}</strong></td>
-                        <td>${doc.owner_name || doc.owner_id || "-"}</td>
-                        <td>${new Date(doc.signed_at).toLocaleString("vi-VN")}</td>
+                        <td><strong>${escapeHtml(doc.document_id)}</strong></td>
+                        <td>${escapeHtml(doc.owner_name || doc.owner_id || "-")}</td>
+                        <td>${escapeHtml(safeDate(doc.signed_at))}</td>
                         <td>
                             <button onclick="viewDoc('${doc.document_id}')" class="btn btn-sm btn-outline">Xem</button>
                             <button onclick="downloadDocument('${doc.document_id}')" class="btn btn-sm btn-primary">Tải PDF</button>
@@ -167,31 +182,33 @@
         async function viewDoc(docId) {
             try {
                 const doc = await apiGet(`/app/documents/${docId}`);
+                const safeSignature = escapeHtml(doc.signature || "-");
+                const safeVerifyUrl = escapeHtml(doc.verify_url || "-");
                 document.getElementById("detailTitle").textContent = `Hồ sơ ${doc.document_id}`;
                 document.getElementById("detailContent").innerHTML = `
                     <div class="detail-grid">
                         <div class="detail-label">Mã hồ sơ</div>
-                        <div class="detail-value">${doc.document_id}</div>
+                        <div class="detail-value">${escapeHtml(doc.document_id)}</div>
                         <div class="detail-label">Trạng thái</div>
-                        <div class="detail-value"><span class="badge badge-${doc.status}">${doc.status}</span></div>
+                        <div class="detail-value"><span class="badge badge-${escapeHtml(doc.status)}">${escapeHtml(doc.status)}</span></div>
                         <div class="detail-label">Người nộp</div>
-                        <div class="detail-value">${doc.owner_name || doc.owner_id || "-"}</div>
+                        <div class="detail-value">${escapeHtml(doc.owner_name || doc.owner_id || "-")}</div>
                         <div class="detail-label">Ngày tạo</div>
-                        <div class="detail-value">${new Date(doc.created_at).toLocaleString("vi-VN")}</div>
+                        <div class="detail-value">${escapeHtml(safeDate(doc.created_at))}</div>
                         ${doc.signed_at ? `
                         <div class="detail-label">Ngày ký</div>
-                        <div class="detail-value">${new Date(doc.signed_at).toLocaleString("vi-VN")}</div>
+                        <div class="detail-value">${escapeHtml(safeDate(doc.signed_at))}</div>
                         <div class="detail-label">Hash</div>
-                        <div class="detail-value" style="font-size:12px">${doc.file_hash || "-"}</div>
+                        <div class="detail-value" style="font-size:12px">${escapeHtml(doc.file_hash || "-")}</div>
                         <div class="detail-label">Chữ ký</div>
                         <div class="detail-value" style="font-size:12px;word-break:break-all">
                             ${doc.signature && doc.signature.length > 70 ? `
-                                <span id="sigShort">${doc.signature.substring(0, 70)}... <a href="#" onclick="event.preventDefault();document.getElementById('sigShort').style.display='none';document.getElementById('sigFull').style.display='inline'" style="font-size:11px">Xem thêm</a></span>
-                                <span id="sigFull" style="display:none">${doc.signature} <a href="#" onclick="event.preventDefault();document.getElementById('sigFull').style.display='none';document.getElementById('sigShort').style.display='inline'" style="font-size:11px">Thu gọn</a></span>
-                            ` : (doc.signature || "-")}
+                                <span id="sigShort">${escapeHtml(doc.signature.substring(0, 70))}... <a href="#" onclick="event.preventDefault();document.getElementById('sigShort').style.display='none';document.getElementById('sigFull').style.display='inline'" style="font-size:11px">Xem thêm</a></span>
+                                <span id="sigFull" style="display:none">${safeSignature} <a href="#" onclick="event.preventDefault();document.getElementById('sigFull').style.display='none';document.getElementById('sigShort').style.display='inline'" style="font-size:11px">Thu gọn</a></span>
+                            ` : safeSignature}
                         </div>
                         <div class="detail-label">Verify URL</div>
-                        <div class="detail-value"><a href="${doc.verify_url}" target="_blank">${doc.verify_url || "-"}</a></div>
+                        <div class="detail-value"><a href="${safeVerifyUrl}" target="_blank" rel="noopener noreferrer">${safeVerifyUrl}</a></div>
                         ` : ""}
                     </div>
                 `;

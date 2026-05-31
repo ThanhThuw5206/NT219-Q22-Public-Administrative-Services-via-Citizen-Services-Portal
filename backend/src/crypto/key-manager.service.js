@@ -66,8 +66,10 @@ const AES_CIPHER = "aes-256-cbc";
 // Resolve the keystore path relative to this file so it survives any
 // `process.cwd()` change (e.g. when run from project root vs. backend/).
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const KEYSTORE_DIR = path.join(__dirname, "keys");
-const KEYSTORE_PATH = path.join(KEYSTORE_DIR, "falcon-keystore.json");
+const KEYSTORE_PATH = process.env.FALCON_KEYSTORE_PATH
+    ? path.resolve(process.env.FALCON_KEYSTORE_PATH)
+    : path.join(__dirname, "keys", "falcon-keystore.json");
+const KEYSTORE_DIR = path.dirname(KEYSTORE_PATH);
 
 /**
  * Stable error class. `code` is part of the public contract so callers can

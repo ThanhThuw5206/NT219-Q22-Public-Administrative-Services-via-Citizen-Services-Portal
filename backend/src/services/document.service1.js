@@ -38,7 +38,8 @@ const buildVerifyUrl = (documentId, token) => {
  * @returns {Object} Thông tin tài liệu đã ký
  */
 export const processDocument = async (input) => {
-    const { filePath, documentId, originalName, ownerId, ipAddress } = input;
+    const { filePath, documentId: providedDocumentId, originalName, ownerId, ipAddress } = input;
+    const documentId = providedDocumentId || generateDocumentId();
 
     const documentFolder = createDocumentFolder(documentId);
     const originalPdfPath = path.join(documentFolder, "original.pdf");
