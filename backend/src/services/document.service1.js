@@ -240,7 +240,9 @@ export const getDocument = async (documentId) => {
         signed_pdf_url: document.signed_pdf_path ? `/api/app/documents/${document.document_id}/signed-pdf` : null,
         status: document.status,
         created_at: document.created_at,
-        signed_at: document.signed_at
+        signed_at: document.signed_at,
+        rejection_reason: document.rejection_reason || null,
+        rejected_at: document.rejected_at || null
     };
 };
 
@@ -466,10 +468,36 @@ export const getDocumentsByStatus = async (status) => {
     );
 
     // Sắp xếp mới nhất lên đầu
-    const dateField = status === "issued" ? "signed_at" : "created_at";
+    const dateField = status === "issued" ? "signed_at" : status === "rejected" ? "rejected_at" : "created_at";
     docs.sort((a, b) => new Date(b[dateField]) - new Date(a[dateField]));
 
     return docs;
+};
+
+/**
+ * Cán bộ từ chối hồ sơ: chuyển trạng thái "rejected", lưu lý do.
+ * @param {Object} params - { documentId, officerId, reason, ipAddress }
+ */
+export const rejectDocument = async ({ documentId, officerId = "officer", reason, ipAddress = null }) => {
+    const document = await findDocumentById(documentId);
+    if (!document) throw new Error("Document not found");
+    if (document.status !== "submitted") throw new Error(`Cannot reject document with status "${document.status}"`);
+
+    const rejectedAt = new Date().toISOString();
+    const updated = await updateDocument(documentId, {
+        status: "rejected",
+        rejection_reason: reason || "Không có lý do",
+        rejected_at: rejectedAt
+    });
+
+    await writeAuditLog({ action: "reject", documentId, userId: officerId, ipAddress, result: "success" });
+
+    return {
+        document_id: updated.document_id,
+        status: updated.status,
+        rejection_reason: updated.rejection_reason,
+        rejected_at: updated.rejected_at
+    };
 };
 
 /** Lấy đường dẫn file PDF (gốc hoặc đã ký) để tải xuống */

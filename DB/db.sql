@@ -229,3 +229,14 @@ CREATE INDEX idx_documents_token_hash ON documents(token_hash);
 CREATE INDEX idx_verification_tokens_token_hash ON verification_tokens(token_hash);
 CREATE INDEX idx_preview_document_id ON document_previews(document_id);
 CREATE INDEX idx_preview_status ON document_previews(status);
+
+-- =========================================================================
+-- 16. MỞ RỘNG: Thêm trạng thái "rejected" và thông tin từ chối hồ sơ
+-- =========================================================================
+ALTER TABLE documents
+    MODIFY COLUMN status ENUM('submitted', 'issued', 'revoked', 'rejected') DEFAULT 'submitted',
+    ADD COLUMN rejection_reason TEXT NULL,
+    ADD COLUMN rejected_at TIMESTAMP NULL;
+
+ALTER TABLE audit_logs
+    MODIFY COLUMN action ENUM('submit', 'sign', 'verify', 'download', 'login', 'logout', 'key_access', 'reject') NOT NULL;
