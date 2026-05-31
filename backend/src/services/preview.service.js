@@ -126,11 +126,19 @@ export const createPreviewDocument = async (data) => {
     const rowHeight  = 20.2;
     const colX = { stt: 83, full_name: 110, birth_date: 248, gender: 325, personal_id: 372, relationship: 470 };
 
+    // Chuyển yyyy-mm-dd → dd/mm/yyyy để hiển thị trong PDF
+    const isoToDisplay = (d) => {
+        if (!d) return "";
+        const p = d.split("-");
+        if (p.length !== 3) return d;
+        return `${p[2].padStart(2, "0")}/${p[1].padStart(2, "0")}/${p[0]}`;
+    };
+
     members.slice(0, 8).forEach((m, i) => {
         const y = rowStartY - i * rowHeight;
         page.drawText(String(i + 1), { ...textConfig, x: colX.stt, y });
         page.drawText(m.full_name || "", { ...textConfig, x: colX.full_name, y, maxWidth: 170 });
-        page.drawText(m.birth_date || "", { ...textConfig, x: colX.birth_date, y, maxWidth: 84 });
+        page.drawText(isoToDisplay(m.birth_date), { ...textConfig, x: colX.birth_date, y, maxWidth: 84 });
         page.drawText(m.gender || "", { ...textConfig, x: colX.gender, y, maxWidth: 36 });
         page.drawText(m.personal_id || "", { ...textConfig, x: colX.personal_id, y, maxWidth: 86 });
         page.drawText(m.relationship_to_head || "", { ...textConfig, x: colX.relationship, y, maxWidth: 100 });

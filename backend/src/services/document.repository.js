@@ -119,7 +119,9 @@ const mysqlRepo = {
                 algorithm = ?,
                 signature_provider = ?,
                 qr_payload = ?,
-                signed_at = ?
+                signed_at = ?,
+                rejection_reason = ?,
+                rejected_at = ?
             WHERE document_id = ?
         `;
         await db.query(query, [
@@ -138,6 +140,8 @@ const mysqlRepo = {
             updated.signature_provider || null,
             updated.qr_payload ? JSON.stringify(updated.qr_payload) : null,
             toMySQL(updated.signed_at),
+            updated.rejection_reason || null,
+            toMySQL(updated.rejected_at),
             documentId
         ]);
         // Trả về toàn bộ document sau khi cập nhật

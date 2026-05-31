@@ -8,6 +8,7 @@ import {
     listDocumentDetails,
     listPendingDocuments,
     listIssuedDocuments,
+    listRejectedDocuments,
     uploadDocument,
     verifyDocumentByQr,
     verifyDocumentByUpload,
@@ -15,7 +16,8 @@ import {
     downloadPreviewDocument,
     issueDocument,
     submitDocumentHandler,
-    signDocumentHandler
+    signDocumentHandler,
+    rejectDocumentHandler
 } from "../controllers/document.controller.js";
 
 import { authenticate, optionalAuthenticate } from "../middlewares/auth.middleware.js";
@@ -38,8 +40,10 @@ router.get("/:documentId/download", authenticate, downloadDocumentFile);
 // Officer/Admin (authenticated + role)
 router.get("/pending", authenticate, requireRole("officer", "admin"), listPendingDocuments);
 router.get("/issued", authenticate, requireRole("officer", "admin"), listIssuedDocuments);
+router.get("/rejected", authenticate, requireRole("officer", "admin"), listRejectedDocuments);
 router.post("/upload", authenticate, requireRole("officer", "admin"), uploadDocument);
 router.post("/:documentId/sign", authenticate, requireRole("officer", "admin"), signDocumentHandler);
+router.post("/:documentId/reject", authenticate, requireRole("officer", "admin"), rejectDocumentHandler);
 
 // Authenticated detail route must stay after fixed routes such as /pending.
 router.get("/:documentId", authenticate, getDocumentDetail);

@@ -28,6 +28,7 @@
         <div class="tabs">
             <div class="tab active" data-tab="pending">Chờ duyệt</div>
             <div class="tab" data-tab="issued">Đã ký</div>
+            <div class="tab" data-tab="rejected">Đã từ chối</div>
         </div>
 
         <div id="tab-pending" class="tab-content active">
@@ -48,6 +49,31 @@
                         </thead>
                         <tbody id="pendingBody">
                             <tr><td colspan="4" class="empty-state"><p>Đang tải...</p></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-rejected" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Hồ sơ đã từ chối</h2>
+                    <button onclick="loadRejected()" class="btn btn-sm btn-outline">Tải lại</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Mã hồ sơ</th>
+                                <th>Người nộp</th>
+                                <th>Ngày từ chối</th>
+                                <th>Lý do</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rejectedBody">
+                            <tr><td colspan="5" class="empty-state"><p>Đang tải...</p></td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -79,6 +105,26 @@
         </div>
     </main>
 
+    <div id="rejectModal" class="modal-overlay" style="display:none">
+        <div class="card" style="width:min(95vw,480px)">
+            <div class="card-header">
+                <h2>Từ chối hồ sơ</h2>
+                <button onclick="closeRejectModal()" class="btn btn-sm btn-outline">Đóng</button>
+            </div>
+            <div style="padding:16px 24px;display:flex;flex-direction:column;gap:12px">
+                <p id="rejectDocLabel" style="margin:0;font-size:14px;color:var(--gray-600)"></p>
+                <div class="form-group">
+                    <label>Lý do từ chối <span style="color:#b91c1c">*</span></label>
+                    <textarea id="rejectReasonInput" rows="4" placeholder="Nhập lý do từ chối hồ sơ..." style="resize:vertical"></textarea>
+                </div>
+            </div>
+            <div style="padding:16px 24px;border-top:1px solid var(--gray-200);display:flex;gap:12px;justify-content:flex-end">
+                <button onclick="closeRejectModal()" class="btn btn-outline">Hủy</button>
+                <button onclick="confirmReject()" class="btn" style="background:#b91c1c;color:#fff;border:none;cursor:pointer">Xác nhận từ chối</button>
+            </div>
+        </div>
+    </div>
+
     <div id="detailModal" class="modal-overlay" style="display:none">
         <div class="card" style="width:min(95vw,900px);max-height:90vh;display:flex;flex-direction:column">
             <div class="card-header" style="flex-shrink:0">
@@ -109,7 +155,8 @@
                     tab.classList.add("active");
                     document.getElementById(`tab-${tab.dataset.tab}`).classList.add("active");
                     if (tab.dataset.tab === "pending") loadPending();
-                    else loadIssued();
+                    else if (tab.dataset.tab === "issued") loadIssued();
+                    else if (tab.dataset.tab === "rejected") loadRejected();
                 });
             });
 
@@ -147,6 +194,7 @@
                         <td>
                             <button onclick="viewDoc('${doc.document_id}')" class="btn btn-sm btn-outline">Xem</button>
                             <button onclick="signDoc('${doc.document_id}')" class="btn btn-sm btn-success">Ký số</button>
+                            <button onclick="openRejectModal('${doc.document_id}')" class="btn btn-sm" style="background:#b91c1c;color:#fff;border:none;cursor:pointer">Từ chối</button>
                         </td>
                     </tr>
                 `).join("");
@@ -195,6 +243,12 @@
                         <div class="detail-value">${escapeHtml(doc.owner_name || doc.owner_id || "-")}</div>
                         <div class="detail-label">Ngày tạo</div>
                         <div class="detail-value">${escapeHtml(safeDate(doc.created_at))}</div>
+                        ${doc.rejection_reason ? `
+                        <div class="detail-label">Lý do từ chối</div>
+                        <div class="detail-value" style="color:#b91c1c">${escapeHtml(doc.rejection_reason)}</div>
+                        <div class="detail-label">Ngày từ chối</div>
+                        <div class="detail-value">${escapeHtml(safeDate(doc.rejected_at))}</div>
+                        ` : ""}
                         ${doc.signed_at ? `
                         <div class="detail-label">Ngày ký</div>
                         <div class="detail-value">${escapeHtml(safeDate(doc.signed_at))}</div>
@@ -218,6 +272,7 @@
                 let actionBtns = `<button onclick="closeDetail()" class="btn btn-sm btn-outline">Đóng</button>`;
                 if (doc.status === "submitted") {
                     actionBtns += `<button onclick="signDocFromModal('${doc.document_id}')" class="btn btn-sm btn-success">Ký số</button>`;
+                    actionBtns += `<button onclick="closeDetail();openRejectModal('${doc.document_id}')" class="btn btn-sm" style="background:#b91c1c;color:#fff;border:none;cursor:pointer">Từ chối</button>`;
                 }
                 if (doc.status === "issued" && doc.verify_url) {
                     try {
@@ -294,6 +349,59 @@
                 link.click();
                 link.remove();
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } catch (err) {
+                showAlert(err.message, "error");
+            }
+        }
+
+        async function loadRejected() {
+            try {
+                const docs = await apiGet("/app/documents/rejected");
+                const tbody = document.getElementById("rejectedBody");
+                if (!docs || docs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>Không có hồ sơ nào đã từ chối</p></td></tr>';
+                    return;
+                }
+                tbody.innerHTML = docs.map(doc => `
+                    <tr>
+                        <td><strong>${escapeHtml(doc.document_id)}</strong></td>
+                        <td>${escapeHtml(doc.owner_name || doc.owner_id || "-")}</td>
+                        <td>${escapeHtml(safeDate(doc.rejected_at))}</td>
+                        <td style="max-width:260px;word-break:break-word">${escapeHtml(doc.rejection_reason || "-")}</td>
+                        <td><button onclick="viewDoc('${escapeHtml(doc.document_id)}')" class="btn btn-sm btn-outline">Xem</button></td>
+                    </tr>
+                `).join("");
+            } catch (err) {
+                showAlert(err.message, "error");
+            }
+        }
+
+        let pendingRejectDocId = null;
+
+        function openRejectModal(docId) {
+            pendingRejectDocId = docId;
+            document.getElementById("rejectDocLabel").textContent = `Hồ sơ: ${docId}`;
+            document.getElementById("rejectReasonInput").value = "";
+            document.getElementById("rejectModal").style.display = "flex";
+        }
+
+        function closeRejectModal() {
+            document.getElementById("rejectModal").style.display = "none";
+            pendingRejectDocId = null;
+        }
+
+        async function confirmReject() {
+            const reason = document.getElementById("rejectReasonInput").value.trim();
+            if (!reason) {
+                showAlert("Vui lòng nhập lý do từ chối", "error");
+                return;
+            }
+            const docId = pendingRejectDocId;
+            closeRejectModal();
+            try {
+                await apiPost(`/app/documents/${docId}/reject`, { reason });
+                showAlert(`Đã từ chối hồ sơ ${docId}`, "success");
+                loadPending();
             } catch (err) {
                 showAlert(err.message, "error");
             }

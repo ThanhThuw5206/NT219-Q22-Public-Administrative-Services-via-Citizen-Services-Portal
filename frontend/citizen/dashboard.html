@@ -191,8 +191,8 @@
             });
 
             document.getElementById("btnPreview").addEventListener("click", async () => {
-                const formData = getFormData();
                 try {
+                    const formData = getFormData();
                     const res = await apiPost("/app/documents/preview", formData);
                     currentPreviewId = res.data.preview_id;
                     document.getElementById("previewFrame").src = await apiBlobUrl(res.data.preview_url);
@@ -204,11 +204,11 @@
 
             document.getElementById("submitForm").addEventListener("submit", async (e) => {
                 e.preventDefault();
-                const formData = getFormData();
-                if (currentPreviewId) {
-                    formData.preview_id = currentPreviewId;
-                }
                 try {
+                    const formData = getFormData();
+                    if (currentPreviewId) {
+                        formData.preview_id = currentPreviewId;
+                    }
                     const res = await apiPost("/app/documents/submit", formData);
                     showAlert(`Nộp hồ sơ thành công! Mã hồ sơ: ${res.data.document_id}`, "success");
                     document.getElementById("submitForm").reset();
@@ -280,20 +280,53 @@
         }
 
         function getMembers() {
-            return Array.from(document.querySelectorAll("#membersBody tr[id^='member-row-']")).map(tr => {
+            const rows = Array.from(document.querySelectorAll("#membersBody tr[id^='member-row-']"));
+            const errors = [];
+            const members = rows.map((tr, idx) => {
+                const num = idx + 1;
+                const fullName = tr.querySelector(".m-full_name").value.trim();
+                if (!fullName) return null; // bỏ qua hàng trống
+
                 const raw = tr.querySelector(".m-birth_date").value.trim();
-                // Chuyển dd/mm/yyyy → yyyy-mm-dd cho DB
-                let birth_date = raw;
-                const parts = raw.split("/");
-                if (parts.length === 3) birth_date = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                const personalId = tr.querySelector(".m-personal_id").value.trim();
+                let birth_date = "";
+
+                if (!raw) {
+                    errors.push(`Thành viên ${num}: Thiếu ngày sinh`);
+                } else {
+                    const parts = raw.split("/");
+                    if (parts.length === 3) {
+                        const d = parseInt(parts[0], 10);
+                        const mo = parseInt(parts[1], 10);
+                        const y = parseInt(parts[2], 10);
+                        const dateObj = new Date(y, mo - 1, d);
+                        if (!parts[2] || isNaN(dateObj.getTime()) ||
+                            dateObj.getFullYear() !== y || dateObj.getMonth() !== mo - 1 || dateObj.getDate() !== d) {
+                            errors.push(`Thành viên ${num}: Ngày sinh không hợp lệ (${raw})`);
+                        } else {
+                            // Chuẩn hóa sang yyyy-mm-dd có zero-padding
+                            birth_date = `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                        }
+                    } else {
+                        errors.push(`Thành viên ${num}: Ngày sinh sai định dạng – phải là dd/mm/yyyy`);
+                    }
+                }
+
+                if (personalId && !/^\d{12}$/.test(personalId)) {
+                    errors.push(`Thành viên ${num}: Số định danh phải có đúng 12 chữ số`);
+                }
+
                 return {
-                    full_name: tr.querySelector(".m-full_name").value.trim(),
+                    full_name: fullName,
                     birth_date,
                     gender: tr.querySelector(".m-gender").value,
-                    personal_id: tr.querySelector(".m-personal_id").value.trim(),
+                    personal_id: personalId,
                     relationship_to_head: tr.querySelector(".m-relationship").value.trim()
                 };
-            }).filter(m => m.full_name);
+            }).filter(m => m !== null);
+
+            if (errors.length > 0) throw new Error(errors.join("\n"));
+            return members;
         }
 
         function getFormData() {
@@ -326,13 +359,19 @@
                     return;
                 }
                 tbody.innerHTML = all.map(doc => {
-                    const statusLabel = doc.status === "issued" ? "Đã ký" : doc.status === "submitted" ? "Chờ duyệt" : doc.status;
+                    const statusLabel = doc.status === "issued" ? "Đã ký"
+                        : doc.status === "submitted" ? "Chờ duyệt"
+                        : doc.status === "rejected" ? "Từ chối"
+                        : doc.status;
                     const verifyToken = doc.verify_url ? new URL(doc.verify_url).searchParams.get("token") : null;
                     const verifyLink = verifyToken ? `../verify.html?id=${encodeURIComponent(doc.document_id)}&token=${encodeURIComponent(verifyToken)}` : "#";
+                    const rejectionNote = doc.status === "rejected" && doc.rejection_reason
+                        ? `<div style="font-size:12px;color:#b91c1c;margin-top:4px">Lý do: ${escapeHtml(doc.rejection_reason)}</div>`
+                        : "";
                     return `
                     <tr>
                         <td><strong>${escapeHtml(doc.document_id)}</strong></td>
-                        <td><span class="badge badge-${escapeHtml(doc.status)}">${escapeHtml(statusLabel)}</span></td>
+                        <td><span class="badge badge-${escapeHtml(doc.status)}">${escapeHtml(statusLabel)}</span>${rejectionNote}</td>
                         <td>${escapeHtml(safeDate(doc.created_at))}</td>
                         <td>
                             ${doc.status === "issued" ? `<button onclick="downloadDocument('${escapeHtml(doc.document_id)}')" class="btn btn-sm btn-primary">Tải PDF</button>` : ""}

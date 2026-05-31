@@ -87,7 +87,7 @@ const isMySQL = DB_STORAGE_TYPE === "mysql";
 /**
  * Ghi nhận nhật ký hệ thống (Audit Log)
  */
-const VALID_ACTIONS = new Set(["submit", "sign", "verify", "download", "login", "logout", "key_access"]);
+const VALID_ACTIONS = new Set(["submit", "sign", "verify", "download", "login", "logout", "key_access", "reject"]);
 
 export const writeAuditLog = async ({ action, documentId = null, result, userId = null, ipAddress = null }) => {
     const safeAction = VALID_ACTIONS.has(action) ? action : "key_access";
