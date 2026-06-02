@@ -1,0 +1,33 @@
+{
+  "document_id": "HS-2026-A0C0DBA7",
+  "owner_id": 4,
+  "file_hash": "0c233da2a32863f3241bfab72fdc9e83c04380c3d391302125601e672262a41d",
+  "signature": "OSVT+oivGUlyUV4L/mHQLsTtNLU3bW7RsCuBMwXHjHd5JXfIMU/Uv8e/0zFF+xvtweQVcn8Mjzj4MgH+iVXq9W9yPoTzonKT6dNzFzVnHWii++Ewo8jDLNhanxvJBOyjsRgLDtcw9EHptuk/vxnSZG6XGyN+4SxoE6XRqMgQdJYu2cmWux9atQfa6lLo3K2aSmkynaI8VDGmdNc4DPTOSohz9VOFpd8hrT2njQ8tMJQYxsxt1qNohukizwatd4EzNUo2OzZLNeIanmtRGAWRjFWy7lOrQZCwuyXiB+jB1y3bggw9mVczRxtLuSXT54peqTIUiEvNEiKFR91cQ0G3hVsVro3/+cBciYuZK8IZCntjCFsInWpeTVvt4hTF39O1+nGppeu7uuUL6uR4XTeFvcIz9L9m5qKhsi4p1U41E3vVDxSeZxMDG0+vOjfJ7eN/2fAiLLl03jP99slrexgWk5L7SAyG6j8ljML/JFKCu6KIh3+y0sHxkX6kMfaGRWbNUojc/nCTbaOJW/hdDgwBbEjU7Doywxr41AEgiC8swR170ofErcEQNTKfYlHnKNZyq/VPMIfzDZpHSXz+s1Lc2WgoviZKQ1R+7J6ncMfup85zPEvox5I7btntm6gPLoGo6X7/09MqL/jLTGcDORmoldMEfCG/nwanxqPIz1Qxt6E1qRKLtkYgmLwB0wssiRNK1WTlPOuqEgrGeMM96cXLN+vvZN8S3dnYzhtHwS/CT0p8zdNOUK6+H9SIaDhxoIpt7RUHUVIhdYaE4iOsu52cf7p8xuqPgpLyPNYdDrireVSIxwS5TQ+DzrEZrHMhefVzYjEbfEIVQ3h6Cg1j95KVspRf5wJoixiWC3KF+hA=",
+  "public_key_id": "falcon-development-key-02597ccf",
+  "public_key": "CUpUhRNljaBjAV7HZsKzABH7NnBjFZ2Sfeu/iVCwNQs381vYCWo6xKCOd2M97nTIRa5THWVAPw+nuhSul3EKwGbMNaKnXxx8vbYoTAFqLJViETIWnSxM3PRXK9kX7Mlxwqh+D2310Zsd4C+lDqneBnldal2kxYsCKc42C1UkKRrarSDsU+BZiE+4yFrjCn7ABt2st3qw2uC8Uta/PNqGmCqHSygnQtadXrA8vUQpaK8IbaaWQhi+jvwmgQ+EuGB1QwJfi+Allg2JukMHZdKZsb+ZHRMWZ1IAZVggmO67VEbHGLqQmpfD+oCYKasKmgaq/uvg69PUfeGSBQCrP08FAcOHHIowZOUHFWgwsTbny7vuiQvGKKnmT+2LUNzo5pCCIQlHxiItDDPxYEgriwCsQjNxKkXsfwIUYFTSjngiNVXm114nCAAIuKiiANw8SopRzIHBd0AH2tplsQir+xBcQDSoMfErd64Bd4UnADtvUAl0mI3fSopaJH8KDruB3LhwTTxzsFS7xRPyVqxOAnaAP3T15pflh/ixVDeC5dTYfGoiW0RFbRhsU+UtY8CupVa0OpdrDAJe9XDpzCwEKUmBD25krKvnN0XpTD0t5LRB7CpJ3IJKxx2z+VwHg8MvSHT86+eBgI7gb0mPauRxJoKLZOvRTEWh23Nm7ypdzem00NyYMX3biY3tGO2p+h5AfyTA6UhgAKxDSsPbh4nLFDDMpWong3FCycq+EJkvFFGnLN/go64huNFYGhFgyKeTr2Rzpr+5fIKod4ULa1hMnoflZvaQLxo6GFYL/8F2WiHPRX/FzIbEHddKD51fAVKJ7K0GYRzi4bKfZHXFCnNaaAxlxtVZNtSbYWQr9GEubHdGOISShsieHfgWoRA7BI1BykgYhDi5gQCXkLZ/jVnhsy6/fRmaWshThqq8RHVLby+39RM0vCUWniX2ensopC4G/8FsLg1jVJHbCA24g1ErevRGOBJRF1suquK9BkS3nte6UjrFFSoSFiT2k4Xy7/i7AD/aeEFzj2zveWgLjbx5ZzaLTNWThkeSa1Cxh2CO8DrRH2YEWbbHyG673OzW62pCc5kPsphcXmjiRShBSgYvyM0g7QcZGExxgs/UFnlRDihBh6c/AoDjOVYTku4P677kSVawuUjlUROavGrYQRSaqd0JE07pG46hMHlYiV8LMj67ulcl",
+  "token_hash": "86099bce0ad286144da93af4f9218f54526baf5f980c593112ef0139ad8b384d",
+  "status": "issued",
+  "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-A0C0DBA7?token=dB909mrk4p3xwvR9Mh_xsQSGwBanddd55QOVPpe3ndQ",
+  "qr_payload": {
+    "token": "dB909mrk4p3xwvR9Mh_xsQSGwBanddd55QOVPpe3ndQ",
+    "verify_url": "http://localhost:3000/api/public/documents/verify/HS-2026-A0C0DBA7?token=dB909mrk4p3xwvR9Mh_xsQSGwBanddd55QOVPpe3ndQ",
+    "document_id": "HS-2026-A0C0DBA7"
+  },
+  "signature_payload": {
+    "key_id": "falcon-development-key-02597ccf",
+    "version": "1.0",
+    "file_hash": "0c233da2a32863f3241bfab72fdc9e83c04380c3d391302125601e672262a41d",
+    "issued_at": "2026-05-27T06:18:05.068Z",
+    "document_id": "HS-2026-A0C0DBA7"
+  },
+  "algorithm": "FALCON-512",
+  "signature_provider": "crypto-zone",
+  "original_name": "CT01.pdf",
+  "file_path": "C:\\Users\\hphun\\NT219\\DoAn\\Public-Administrative-Services-via-Citizen-Services-Portal\\backend\\storage\\documents\\HS-2026-A0C0DBA7\\original.pdf",
+  "original_file_hash": "727b933752ab1cd7531101c446d5c31debf664a14115790eac1ec4eab567b141",
+  "preview_id": null,
+  "created_at": "2026-05-27T06:14:19.000Z",
+  "signed_at": "2026-05-26T23:18:05.000Z",
+  "original_pdf_path": null,
+  "signed_pdf_path": "C:\\Users\\hphun\\NT219\\DoAn\\Public-Administrative-Services-via-Citizen-Services-Portal\\backend\\storage\\documents\\HS-2026-A0C0DBA7\\signed.pdf"
+}
