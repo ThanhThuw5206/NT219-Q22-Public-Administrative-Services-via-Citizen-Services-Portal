@@ -88,11 +88,12 @@ password: admin123
 Công dân có thể đăng ký trực tiếp tại `/register.html`.
 
 ---
-# Sửa 1 vài vấn đề bảo mật
-- Sửa lại DB
-- thêm DB_PORT=3306 // có thể sửa nếu port đã có app khác dùng
-- đồng bộ BE vs DB
-- Kết nối FE vs BE
+# Test FALCON + HASH
+```bash
+node tests/manual-hash-test.js
+
+node tests/manual-falcon-test.js
+```
 ---
 
 ## API chính
@@ -152,6 +153,12 @@ INTERNAL_CRYPTO_SECRET=change-me-in-production
 KEY_STORAGE_TYPE=file
 PUBLIC_VERIFY_URL=http://localhost:3000/api/public/documents/verify
 NODE_ENV=development
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=
+DB_NAME=document_verification
+DB_PORT=3306 
+DB_STORAGE_TYPE=mysql
 ```
 
 Không dùng secret mặc định cho môi trường thật.
