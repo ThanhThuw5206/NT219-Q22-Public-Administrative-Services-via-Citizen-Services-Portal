@@ -3,24 +3,13 @@
  * Initializes Express, mounts middleware, routes, and starts listening.
  */
 import "dotenv/config";
-import express from "express";
-<<<<<<< HEAD
-import cors from "cors";
-import documentRoutes from "./routes/document.routes.js";
-
-const app = express();
-
-app.use(cors());
-app.use(express.json());
-
-app.use("/api/documents", documentRoutes);
-
-app.listen(3000, () => {
-    console.log("Server running on http://localhost:3000");
-});
-=======
+import fs from "fs";
+import https from "https";
 import path from "path";
+import express from "express";
 import { fileURLToPath } from "url";
+
+import app from "./app.js";
 import { NETWORK_ZONES } from "./config/network.config.js";
 import {
     attachNetworkZone,
@@ -40,14 +29,23 @@ import cors from "cors";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// CORS: whitelist allowed origins
+const PORT = process.env.PORT || 3000;
+const HTTPS_KEY_PATH = process.env.HTTPS_KEY_PATH;
+const HTTPS_CERT_PATH = process.env.HTTPS_CERT_PATH;
+
+// CORS: whitelist allowed origins.
 const allowedOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(",").map(o => o.trim())
-    : ["http://localhost:3000", "http://127.0.0.1:3000"];
+    : [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://localhost:3000",
+        "https://127.0.0.1:3000",
+    ];
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow requests with no origin (e.g. server-to-server, curl)
+        // Allow requests with no origin (e.g. server-to-server, curl).
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -57,36 +55,34 @@ app.use(cors({
     credentials: true
 }));
 
-// Create storage folders if they don't exist
+// Create storage folders if they don't exist.
 ensureStorageFolders();
 
-// Seed default users (dev only)
+// Seed default users (dev only).
 await seedDefaultUsers();
-
-const PORT = process.env.PORT || 3000;
 
 // ===================== ROUTE MOUNTING =====================
 
-// Global rate limiter for all API routes
+// Global rate limiter for all API routes.
 app.use("/api", globalLimiter);
 
-// Xác thực: đăng ký, đăng nhập, thông tin người dùng (stricter rate limit)
+// Authentication: register, login, user profile.
 app.use("/api/auth", authLimiter, authRoutes);
 
-// Công khai: xác minh tài liệu qua QR/upload (không cần đăng nhập)
+// Public verification endpoints for QR/upload.
 app.use("/api/public",
     verifyLimiter,
     attachNetworkZone(NETWORK_ZONES.PUBLIC),
     publicRoutes
 );
 
-// Ứng dụng: quản lý hồ sơ, ký số, tải file (cần JWT)
+// Application document management routes.
 app.use("/api/app/documents",
     attachNetworkZone(NETWORK_ZONES.APPLICATION),
     documentRoutes
 );
 
-// Nội bộ: dịch vụ mã hóa Falcon-512 (cần secret header)
+// Internal Falcon crypto service.
 app.use(
     "/api/internal/crypto",
     attachNetworkZone(NETWORK_ZONES.CRYPTO),
@@ -94,7 +90,7 @@ app.use(
     cryptoRoutes
 );
 
-// Phục vụ file tĩnh frontend (HTML/CSS/JS)
+// Serve static frontend files.
 const frontendPath = path.join(__dirname, "../../frontend");
 app.use(express.static(frontendPath));
 
@@ -102,13 +98,23 @@ app.get("/", (req, res) => {
     res.sendFile(path.join(frontendPath, "index.html"));
 });
 
-// 404 handler for unmatched API routes
+// 404 handler for unmatched API routes.
 app.use("/api", notFoundHandler);
 
-// Global error handler (must be last)
+// Global error handler (must be last).
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-});
->>>>>>> origin/develop
+if (HTTPS_KEY_PATH && HTTPS_CERT_PATH) {
+    const httpsOptions = {
+        key: fs.readFileSync(HTTPS_KEY_PATH),
+        cert: fs.readFileSync(HTTPS_CERT_PATH),
+    };
+
+    https.createServer(httpsOptions, app).listen(PORT, () => {
+        console.log(`Server running on https://localhost:${PORT}`);
+    });
+} else {
+    app.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+    });
+}

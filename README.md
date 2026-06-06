@@ -1,5 +1,6 @@
-# NT219-Q22-Public-Administrative-Services-via-Citizen-Services-Portal
+# NT219-Q22 Public Administrative Services Portal
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 # 🚀 Hướng dẫn chạy Backend
 
@@ -7,6 +8,8 @@
 
 Chạy lệnh sau để cài các thư viện cần thiết:
 =======
+=======
+>>>>>>> 23a197e01f4b73f3ec366b487282b0512f2d57f0
 Demo cổng dịch vụ công cho đồ án mật mã học: công dân nộp hồ sơ hành chính, cán bộ ký số PDF bằng Falcon-512, công dân hoặc bên thứ ba xác minh tài liệu bằng QR/token.
 
 ## Trạng thái hiện tại
@@ -47,11 +50,21 @@ Payload được ký có dạng canonical JSON:
 }
 ```
 # Cài package
+<<<<<<< HEAD
 >>>>>>> origin/develop
+=======
+>>>>>>> 23a197e01f4b73f3ec366b487282b0512f2d57f0
 
 ```bash
-npm install express dotenv cors sequelize mysql2 multer uuid
+npm install qrcode fs-extra
+
+npm install pdf-lib
+
+npm install @noble/post-quantum
+
+npm install @pdf-lib/fontkit
 ```
+<<<<<<< HEAD
 <<<<<<< HEAD
 ```bash
 npm run dev
@@ -62,6 +75,8 @@ npm run dev
 - tab: body->form-data
 - key:file; type:file-> chọn file pdf->send
 =======
+=======
+>>>>>>> 23a197e01f4b73f3ec366b487282b0512f2d57f0
 # connect frontend vs backend
 ```bash
 cd backend
@@ -189,4 +204,7 @@ Test hiện có kiểm tra:
 - Private key không expose qua API; chỉ public key được trả ra.
 - Crypto Zone có secret riêng qua header nội bộ.
 - JSON store phù hợp demo/môn học; nếu triển khai thật nên thay bằng DB có transaction, audit log bền vững, rate limit và HTTPS.
+<<<<<<< HEAD
 >>>>>>> origin/develop
+=======
+>>>>>>> 23a197e01f4b73f3ec366b487282b0512f2d57f0

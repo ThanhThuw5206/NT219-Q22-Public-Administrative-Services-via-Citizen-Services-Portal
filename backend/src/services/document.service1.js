@@ -14,6 +14,7 @@ import fsExtra from "fs-extra";
 import { createDocumentFolder } from "../utils/storage.util.js";
 import { generateQrCode } from "./qr.service.js";
 import { embedQrIntoPdf } from "./pdf.service.js";
+import { PUBLIC_VERIFY_URL } from "../config/env.config.js";
 
 /** Tạo mã hồ sơ duy nhất theo định dạng HS-{NĂM}-{8 ký tự UUID} */
 const generateDocumentId = () => {
@@ -27,8 +28,7 @@ const generateVerificationToken = () => {
 
 /** Tạo URL xác minh công khai từ PUBLIC_VERIFY_URL trong .env */
 const buildVerifyUrl = (documentId, token) => {
-    const baseUrl = process.env.PUBLIC_VERIFY_URL || "http://localhost:3000/api/public/documents/verify";
-    return `${baseUrl}/${documentId}?token=${token}`;
+    return `${PUBLIC_VERIFY_URL}/${documentId}?token=${token}`;
 };
 
 /**

@@ -1,8 +1,12 @@
+
 import express from "express";
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { uploadDocument } from "../controllers/document.controller.js";
 =======
+=======
+>>>>>>> 23a197e01f4b73f3ec366b487282b0512f2d57f0
 import {
     downloadSignedDocument,
     downloadDocumentFile,
@@ -21,7 +25,10 @@ import {
     signDocumentHandler,
     rejectDocumentHandler
 } from "../controllers/document.controller.js";
+<<<<<<< HEAD
 >>>>>>> origin/develop
+=======
+>>>>>>> 23a197e01f4b73f3ec366b487282b0512f2d57f0
 
 import { authenticate, optionalAuthenticate } from "../middlewares/auth.middleware.js";
 import { requireRole } from "../middlewares/role.middleware.js";
@@ -29,8 +36,11 @@ import { requireRole } from "../middlewares/role.middleware.js";
 const router = express.Router();
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 router.post("/upload", uploadDocument);
 =======
+=======
+>>>>>>> 23a197e01f4b73f3ec366b487282b0512f2d57f0
 // Public verification/download endpoints. Keep these before dynamic detail routes.
 router.get("/verify/:documentId", verifyDocumentByQr);
 router.post("/verify/:documentId", verifyDocumentByUpload);
@@ -56,6 +66,9 @@ router.get("/:documentId", authenticate, getDocumentDetail);
 
 // Legacy
 router.post("/issue", authenticate, requireRole("officer", "admin"), issueDocument);
+<<<<<<< HEAD
 >>>>>>> origin/develop
+=======
+>>>>>>> 23a197e01f4b73f3ec366b487282b0512f2d57f0
 
 export default router;

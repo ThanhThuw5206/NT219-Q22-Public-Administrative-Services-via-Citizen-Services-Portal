@@ -4,8 +4,8 @@ backend/src/signed/
 backend/src/data/
 backend/src/keys/
 backend/src/crypto/keys/
+backend/certs/
 .env
 .kiro
 .claude/
 CONFLICT_ANALYSIS.md
-
