@@ -1,11 +1,3 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-import multer from "multer";
-import { processDocument } from "../services/document.service.js";
-
-=======
-=======
->>>>>>> 23a197e01f4b73f3ec366b487282b0512f2d57f0
 /**
  * document.controller.js - Điều khiển các endpoint quản lý tài liệu.
  * Bao gồm: xem trước, nộp hồ sơ, ký số, xác minh, tải file, danh sách.
@@ -73,10 +65,6 @@ if (!fs.existsSync(uploadFolder)) {
 }
 
 /** Cấu hình multer: chỉ chấp nhận file PDF, lưu vào thư mục uploads */
-<<<<<<< HEAD
->>>>>>> origin/develop
-=======
->>>>>>> 23a197e01f4b73f3ec366b487282b0512f2d57f0
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         fs.mkdirSync(uploadDirectory, { recursive: true });
@@ -87,17 +75,6 @@ const storage = multer.diskStorage({
     }
 });
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-const upload = multer({ storage }).single("file");
-
-export const uploadDocument = (req, res) => {
-    upload(req, res, function (err) {
-        if (err) {
-            return res.status(500).json({ message: "Upload error" });
-=======
-=======
->>>>>>> 23a197e01f4b73f3ec366b487282b0512f2d57f0
 const pdfOnly = (req, file, cb) => {
     if (file.mimetype !== "application/pdf") {
         return cb(new Error("Only PDF files are allowed"));
@@ -312,30 +289,11 @@ export const getDocumentDetail = async (req, res) => {
 
         if (!document) {
             return res.status(404).json({ message: "Document not found" });
-<<<<<<< HEAD
->>>>>>> origin/develop
-=======
->>>>>>> 23a197e01f4b73f3ec366b487282b0512f2d57f0
         }
 
         if (!canAccessDocument(req.user, document)) {
             return res.status(403).json({ message: "You do not have access to this document" });
         }
-
-<<<<<<< HEAD
-<<<<<<< HEAD
-        // gọi service xử lý
-        const result = processDocument(req.file.path);
-        res.json({
-            message: "Upload OK",
-            file: req.file.path,
-            documentInfo: result
-        });
-    });
-};
-=======
-=======
->>>>>>> 23a197e01f4b73f3ec366b487282b0512f2d57f0
         res.json(document);
     } catch (error) {
         safeError(res, error);
@@ -598,7 +556,3 @@ export const issueDocument = async (req, res) => {
         safeError(res, error);
     }
 };
-<<<<<<< HEAD
->>>>>>> origin/develop
-=======
->>>>>>> 23a197e01f4b73f3ec366b487282b0512f2d57f0
