@@ -16,6 +16,7 @@ import express from "express";
 
 import {
     cryptoGetPublicKey,
+    cryptoRegisterExternalPublicKey,
     cryptoSign,
     cryptoVerify,
 } from "../controllers/crypto.controller.js";
@@ -23,6 +24,7 @@ import {
 const router = express.Router();
 
 router.get("/public-key", cryptoGetPublicKey);
+router.post("/keys/external-public", cryptoRegisterExternalPublicKey);
 router.post("/sign", cryptoSign);
 router.post("/verify", cryptoVerify);
 

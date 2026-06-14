@@ -158,6 +158,9 @@ export function signaturePayload(input) {
         purpose,
         signer,
         organization,
+        action,
+        challengeId,
+        nonce,
     } = input;
 
     assertNonEmptyString(documentId, "documentId");
@@ -191,13 +194,16 @@ export function signaturePayload(input) {
     }
 
     const canonical = {
+        action: action || "sign_document",
         algorithm: algorithm || ALGORITHM,
+        challenge_id: challengeId || null,
         document_id: documentId,
         document_type: documentType || "CT01",
         file_hash: fileHash,
         hash_algorithm: hashAlgorithm || "SHA-256",
         issued_at: issuedAt,
         key_id: keyId,
+        nonce: nonce || null,
         organization: organization || null,
         purpose: purpose || "Issue public administrative document",
         signer: signer || null,

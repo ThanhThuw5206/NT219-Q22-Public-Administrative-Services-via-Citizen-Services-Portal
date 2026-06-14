@@ -14,6 +14,7 @@ import {
     verifyPayloadSignature,
     getActiveKey,
 } from "../crypto/signature.service.js";
+import { registerExternalPublicKeyForOwner } from "../crypto/key-manager.service.js";
 import * as auditService from "../services/audit.service.js";
 import { IS_DEV } from "../config/env.config.js";
 
@@ -173,5 +174,60 @@ export const cryptoGetPublicKey = async (req, res) => {
         });
     } catch (error) {
         return res.status(500).json(getSafeCryptoError(error, "Load public key"));
+    }
+};
+
+/**
+ * POST /keys/external-public
+ *
+ * Registers a public-only signing key for a user/device or organization.
+ * The backend never receives private key material on this path.
+ */
+export const cryptoRegisterExternalPublicKey = async (req, res) => {
+    try {
+        const {
+            owner_type = "user",
+            owner_id,
+            owner_name,
+            public_key,
+            algorithm = "FALCON-512",
+            provider = "external-device",
+            valid_from,
+            valid_to,
+        } = req.body || {};
+
+        const key = await registerExternalPublicKeyForOwner({
+            ownerType: owner_type,
+            ownerId: String(owner_id || ""),
+            ownerName: owner_name || "",
+            publicKey: public_key,
+            algorithm,
+            provider,
+            validFrom: valid_from || undefined,
+            validTo: valid_to || null,
+        });
+
+        logAudit({
+            keyId: key.key_id,
+            userId: null,
+            ipAddress: req.ip,
+            accessType: "generate",
+            result: "success"
+        });
+
+        return res.status(201).json({
+            message: "External public key registered",
+            key
+        });
+    } catch (error) {
+        logAudit({
+            keyId: null,
+            userId: null,
+            ipAddress: req.ip,
+            accessType: "generate",
+            result: "fail"
+        });
+
+        return res.status(400).json(getSafeCryptoError(error, "Register external public key"));
     }
 };

@@ -6,9 +6,11 @@ import crypto from "crypto";
 import fs from "fs";
 import { hashFile, hashText } from "../crypto/hash.service.js";
 import { saveDocument, updateDocument, findDocumentById, listDocuments } from "./document.repository.js";
-import { createSignature, getLatestSignatureByDocumentId } from "./signature.repository.js";
-import { buildSignaturePayload, getActiveKey, signPayload, verifyPayloadSignature } from "../crypto/signature.service.js";
-import { getPublicKeyById } from "../crypto/key-manager.service.js";
+import { createSignature, getLatestSignatureByDocumentId, listSignaturesByDocumentId } from "./signature.repository.js";
+import { createChallenge, findChallengeById, markChallengeUsed } from "./signing-challenge.repository.js";
+import { buildSignaturePayload, getActiveKey, signPayload, signPayloadWithKey, verifyPayloadSignature } from "../crypto/signature.service.js";
+import { getActivePublicKeyForOwner, getOrCreateActivePublicKeyForOwner, getPublicKeyById } from "../crypto/key-manager.service.js";
+import { ALLOW_SERVER_SIDE_PERSONAL_KEYS, REQUIRE_OFFICER_DEVICE_SIGNATURE } from "../config/env.config.js";
 import { writeAuditLog } from "./audit.service.js";
 import { getUserById } from "./auth.service.js";
 import path from "path";
@@ -55,6 +57,20 @@ const resolveSignerContext = async (officerId) => {
         },
         organization: DEFAULT_ORGANIZATION
     };
+};
+
+const getOfficerPersonalKey = async (signer) => {
+    if (!ALLOW_SERVER_SIDE_PERSONAL_KEYS) {
+        return getActivePublicKeyForOwner({
+            ownerType: "user",
+            ownerId: signer.user_id
+        });
+    }
+    return getOrCreateActivePublicKeyForOwner({
+        ownerType: "user",
+        ownerId: signer.user_id,
+        ownerName: signer.full_name
+    });
 };
 
 const normalizeSignatureRecord = (record) => {
@@ -106,10 +122,11 @@ const createFalconSignatureRecord = async ({
     organization,
     ipAddress,
     reason = "Issue public administrative document",
+    signatureType = "organization_falcon",
 }) => {
     return createSignature({
         document_id: document.document_id,
-        signature_type: "organization_falcon",
+        signature_type: signatureType,
         signature_value: signatureInfo.signature,
         signature_payload_json: payload,
         payload_hash: hashText(payload),
@@ -136,6 +153,80 @@ const writeSignatureEvidenceFile = (documentFolder, evidence) => {
     const evidencePath = path.join(documentFolder, "signature-evidence.json");
     fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2));
     return evidencePath;
+};
+
+const listSignatureSummaries = async (documentId) => {
+    try {
+        const records = await listSignaturesByDocumentId(documentId);
+        return records.map((record) => {
+            const normalized = normalizeSignatureRecord(record);
+            return {
+                signature_id: normalized.signature_id,
+                signature_type: normalized.signature_type,
+                key_id: normalized.key_id,
+                algorithm: normalized.algorithm,
+                signer: normalized.signer,
+                organization: normalized.organization,
+                signed_at: normalized.signed_at,
+                signing_reason: normalized.signing_reason,
+                signature_status: normalized.signature_status,
+                signed_file_hash: normalized.signed_file_hash
+            };
+        });
+    } catch {
+        return [];
+    }
+};
+
+const verifySignatureRecord = async ({ record, currentSignedHash, originalHash }) => {
+    const normalized = normalizeSignatureRecord(record);
+    let publicKey = normalized.public_key;
+    let publicKeyStatus = "unknown";
+    try {
+        const key = await getPublicKeyById(normalized.key_id);
+        publicKey = key.public_key;
+        publicKeyStatus = key.status;
+    } catch {
+        publicKeyStatus = publicKey ? "snapshot" : "missing";
+    }
+
+    const expectedHash = normalized.signed_file_hash;
+    const comparisonHash = normalized.signature_type === "officer_personal_falcon"
+        ? originalHash
+        : currentSignedHash;
+    const hashMatched = expectedHash ? comparisonHash === expectedHash : false;
+    const signatureValid = await verifyPayloadSignature({
+        payload: normalized.signature_payload_json,
+        signature: normalized.signature_value,
+        publicKey
+    });
+
+    return {
+        signature_id: normalized.signature_id,
+        signature_type: normalized.signature_type,
+        key_id: normalized.key_id,
+        algorithm: normalized.algorithm,
+        signer: normalized.signer,
+        organization: normalized.organization,
+        signed_at: normalized.signed_at,
+        signing_reason: normalized.signing_reason,
+        signature_status: normalized.signature_status,
+        signed_file_hash: expectedHash,
+        current_hash: comparisonHash,
+        hash_matched: hashMatched,
+        signature_valid: signatureValid,
+        valid: hashMatched && signatureValid && normalized.signature_status === "active",
+        public_key_status: publicKeyStatus
+    };
+};
+
+const verifyAllSignatureRecords = async ({ documentId, currentSignedHash, originalHash }) => {
+    const records = await listSignaturesByDocumentId(documentId);
+    const verified = [];
+    for (const record of records) {
+        verified.push(await verifySignatureRecord({ record, currentSignedHash, originalHash }));
+    }
+    return verified;
 };
 
 /**
@@ -342,7 +433,21 @@ export const verifyDocument = async ({ documentId, token, filePath = null, userI
         signature: signatureRecord.signature_value,
         publicKey
     });
-    const validV2 = hashMatchedV2 && signatureValidV2;
+    const originalHash = document.original_file_hash || document.file_hash;
+    const verifiedSignatures = await verifyAllSignatureRecords({
+        documentId,
+        currentSignedHash: currentHashV2,
+        originalHash
+    });
+    const organizationVerified = verifiedSignatures.find(
+        (item) => item.signature_type === "organization_falcon"
+    );
+    const officerVerified = verifiedSignatures.find(
+        (item) => item.signature_type === "officer_personal_falcon"
+    );
+    const validV2 = organizationVerified
+        ? organizationVerified.valid
+        : hashMatchedV2 && signatureValidV2;
 
     await writeAuditLog({
         action: "verify",
@@ -370,7 +475,10 @@ export const verifyDocument = async ({ documentId, token, filePath = null, userI
         status: document.status,
         signed_at: signatureRecord.signed_at || document.signed_at,
         signature_type: signatureRecord.signature_type,
-        signature_status: signatureRecord.signature_status
+        signature_status: signatureRecord.signature_status,
+        officer_signature_valid: officerVerified ? officerVerified.valid : null,
+        organization_signature_valid: organizationVerified ? organizationVerified.valid : validV2,
+        signatures: verifiedSignatures
     };
 
     // Khi không có file upload → hash file thật trên đĩa để phát hiện giả mạo
@@ -447,10 +555,12 @@ export const getDocument = async (documentId) => {
     } catch (_) { /* bỏ qua nếu không tìm thấy */ }
 
     let signature_info = null;
+    let signature_summaries = [];
     try {
         signature_info = normalizeSignatureRecord(
             await getLatestSignatureByDocumentId(documentId, "organization_falcon")
         );
+        signature_summaries = await listSignatureSummaries(documentId);
     } catch (_) { /* ignore signature lookup failures for listing */ }
 
     return {
@@ -470,6 +580,7 @@ export const getDocument = async (documentId) => {
         organization: signature_info?.organization || null,
         signature_type: signature_info?.signature_type || null,
         signature_status: signature_info?.signature_status || null,
+        signatures: signature_summaries,
         signature_evidence_path: document.signature_evidence_path || null,
         verify_url: document.verify_url,
         signed_pdf_url: document.signed_pdf_path ? `/api/app/documents/${document.document_id}/signed-pdf` : null,
@@ -567,12 +678,154 @@ export const submitDocument = async ({ documentId, filePath, originalName, owner
     };
 };
 
+export const createSigningChallengeForDocument = async ({ documentId, officerId = "officer", ipAddress = null }) => {
+    const document = await findDocumentById(documentId);
+    if (!document) {
+        throw new Error("Document not found");
+    }
+    if (document.status !== "submitted") {
+        throw new Error(`Cannot sign document with status "${document.status}"`);
+    }
+
+    const { signer, organization } = await resolveSignerContext(officerId);
+    const officerKey = await getOfficerPersonalKey(signer);
+    const originalHash = document.original_file_hash || await hashFile(document.file_path);
+    const challengeId = crypto.randomUUID();
+    const nonce = crypto.randomBytes(32).toString("base64url");
+    const issuedAt = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    const payload = buildSignaturePayload({
+        action: "approve_document",
+        challengeId,
+        nonce,
+        documentId,
+        fileHash: originalHash,
+        issuedAt,
+        keyId: officerKey.key_id,
+        documentType: "CT01",
+        algorithm: officerKey.algorithm,
+        signer,
+        organization,
+        purpose: "Officer approval before public document issuance",
+    });
+
+    await createChallenge({
+        challenge_id: challengeId,
+        document_id: documentId,
+        officer_id: String(officerId),
+        key_id: officerKey.key_id,
+        payload_json: payload,
+        payload_hash: hashText(payload),
+        nonce,
+        status: "pending",
+        expires_at: expiresAt,
+        ip_address: ipAddress
+    });
+
+    return {
+        challenge_id: challengeId,
+        document_id: documentId,
+        key_id: officerKey.key_id,
+        algorithm: officerKey.algorithm,
+        payload,
+        payload_hash: hashText(payload),
+        expires_at: expiresAt,
+        signer,
+        organization
+    };
+};
+
+const verifyOfficerSignatureProof = async ({
+    documentId,
+    officerId,
+    proof,
+    ipAddress
+}) => {
+    if (!proof || typeof proof !== "object") {
+        if (REQUIRE_OFFICER_DEVICE_SIGNATURE) {
+            throw new Error("Officer device signature proof is required");
+        }
+        return null;
+    }
+
+    const { challenge_id: challengeId, signature } = proof;
+    if (!challengeId || !signature) {
+        throw new Error("Officer signature proof must include challenge_id and signature");
+    }
+
+    const challenge = await findChallengeById(challengeId);
+    if (!challenge) {
+        throw new Error("Signing challenge not found");
+    }
+    if (challenge.status !== "pending") {
+        throw new Error("Signing challenge is not pending");
+    }
+    if (String(challenge.document_id) !== String(documentId)) {
+        throw new Error("Signing challenge document mismatch");
+    }
+    if (String(challenge.officer_id) !== String(officerId)) {
+        throw new Error("Signing challenge officer mismatch");
+    }
+    if (challenge.expires_at && new Date(challenge.expires_at) < new Date()) {
+        throw new Error("Signing challenge expired");
+    }
+
+    const publicKey = await getPublicKeyById(challenge.key_id);
+    const signatureValid = await verifyPayloadSignature({
+        payload: challenge.payload_json,
+        signature,
+        publicKey: publicKey.public_key
+    });
+    if (!signatureValid) {
+        throw new Error("Officer device signature is invalid");
+    }
+
+    const usedChallenge = await markChallengeUsed(challengeId);
+    if (!usedChallenge) {
+        throw new Error("Signing challenge was already used");
+    }
+    const { signer, organization } = await resolveSignerContext(officerId);
+    const document = await findDocumentById(documentId);
+    const record = await createFalconSignatureRecord({
+        document,
+        signedFileHash: document.original_file_hash || document.file_hash,
+        issuedAt: new Date().toISOString(),
+        activeKey: publicKey,
+        signatureInfo: {
+            signature,
+            key_id: publicKey.key_id,
+            algorithm: publicKey.algorithm,
+            provider: publicKey.provider || "external-device"
+        },
+        payload: challenge.payload_json,
+        signer,
+        organization,
+        ipAddress,
+        reason: "Officer approval before public document issuance",
+        signatureType: "officer_personal_falcon"
+    });
+
+    return {
+        signatureInfo: {
+            signature,
+            key_id: publicKey.key_id,
+            algorithm: publicKey.algorithm,
+            provider: publicKey.provider || "external-device"
+        },
+        payload: challenge.payload_json,
+        payload_hash: challenge.payload_hash,
+        key: publicKey,
+        record,
+        signed_at: record.signed_at || new Date().toISOString()
+    };
+};
+
 /**
  * Cán bộ ký số hồ sơ: sinh QR, nhúng vào PDF, ký Falcon-512, chuyển trạng thái "issued".
  * @param {Object} params - { documentId, officerId, ipAddress }
  * @returns {Object} Thông tin tài liệu đã ký và phát hành
  */
-export const signDocument = async ({ documentId, officerId = "officer", ipAddress = null }) => {
+export const signDocument = async ({ documentId, officerId = "officer", ipAddress = null, officerSignatureProof = null }) => {
     const document = await findDocumentById(documentId);
 
     if (!document) {
@@ -589,6 +842,58 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
     const token = generateVerificationToken();
     const verifyUrl = buildVerifyUrl(documentId, token);
     const { signer, organization } = await resolveSignerContext(officerId);
+    const originalHash = document.original_file_hash || await hashFile(document.file_path);
+    let officerApproval = await verifyOfficerSignatureProof({
+        documentId,
+        officerId,
+        proof: officerSignatureProof,
+        ipAddress
+    });
+    if (!officerApproval) {
+        const officerKey = await getOfficerPersonalKey(signer);
+        const approvalPayload = buildSignaturePayload({
+            action: "approve_document",
+            documentId,
+            fileHash: originalHash,
+            issuedAt,
+            keyId: officerKey.key_id,
+            documentType: "CT01",
+            algorithm: officerKey.algorithm,
+            signer,
+            organization,
+            purpose: "Officer approval before public document issuance",
+        });
+        let officerSignatureInfo;
+        try {
+            officerSignatureInfo = await signPayloadWithKey(approvalPayload, officerKey.key_id);
+        } catch (error) {
+            if (error?.code === "PUBLIC_ONLY_KEY") {
+                throw new Error("Officer device signature proof is required for public-only personal keys");
+            }
+            throw error;
+        }
+        const officerSignatureRecord = await createFalconSignatureRecord({
+            document,
+            signedFileHash: originalHash,
+            issuedAt,
+            activeKey: officerKey,
+            signatureInfo: officerSignatureInfo,
+            payload: approvalPayload,
+            signer,
+            organization,
+            ipAddress,
+            reason: "Officer approval before public document issuance",
+            signatureType: "officer_personal_falcon"
+        });
+        officerApproval = {
+            signatureInfo: officerSignatureInfo,
+            payload: approvalPayload,
+            payload_hash: hashText(approvalPayload),
+            key: officerKey,
+            record: officerSignatureRecord,
+            signed_at: issuedAt
+        };
+    }
 
     // Look up owner name for QR payload
     let ownerName = "";
@@ -648,18 +953,35 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
     const evidencePath = writeSignatureEvidenceFile(documentFolder, {
         document_id: documentId,
         verify_url: verifyUrl,
-        signature_type: "organization_falcon",
-        signature: signatureInfo.signature,
-        payload,
-        payload_hash: hashText(payload),
-        key_id: signatureInfo.key_id,
-        algorithm: signatureInfo.algorithm,
+        signatures: [
+            {
+                signature_type: "officer_personal_falcon",
+                signature: officerApproval.signatureInfo.signature,
+                payload: officerApproval.payload,
+                payload_hash: officerApproval.payload_hash || hashText(officerApproval.payload),
+                key_id: officerApproval.signatureInfo.key_id,
+                algorithm: officerApproval.signatureInfo.algorithm,
+                signed_file_hash: originalHash,
+                signed_at: officerApproval.signed_at || issuedAt,
+                signature_record_id: officerApproval.record?.signature_id || null
+            },
+            {
+                signature_type: "organization_falcon",
+                signature: signatureInfo.signature,
+                payload,
+                payload_hash: hashText(payload),
+                key_id: signatureInfo.key_id,
+                algorithm: signatureInfo.algorithm,
+                signed_file_hash: fileHash,
+                signed_at: issuedAt,
+                signature_record_id: signatureRecord.signature_id || null
+            }
+        ],
         signer,
         organization,
         signed_file_hash: fileHash,
-        original_file_hash: document.original_file_hash || null,
+        original_file_hash: originalHash,
         signed_at: issuedAt,
-        signature_record_id: signatureRecord.signature_id || null,
         note: "QR supports public verification; Falcon evidence is verified by backend."
     });
 

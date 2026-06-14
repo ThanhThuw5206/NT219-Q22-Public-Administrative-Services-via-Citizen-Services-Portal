@@ -63,6 +63,9 @@ const SCRYPT_SALT_BYTES = 16;
 const GCM_IV_BYTES = 12;
 const GCM_AUTH_TAG_BYTES = 16;
 const AES_GCM_CIPHER = "aes-256-gcm";
+const FALCON512_PUBLIC_KEY_BYTES = 897;
+const VALID_OWNER_TYPES = new Set(["user", "organization"]);
+const VALID_EXTERNAL_PROVIDERS = new Set(["external-device", "smartcard", "pkcs11", "hsm", "kms"]);
 
 const LEGACY_PBKDF2_ITERATIONS = 10000;
 const LEGACY_PBKDF2_KEY_BYTES = 32;
@@ -234,6 +237,9 @@ function decryptPrivateKey(encrypted, password) {
 }
 
 function canDecryptPrivateKey(entry) {
+    if (!entry?.encrypted_private_key) {
+        return false;
+    }
     try {
         decryptPrivateKey(entry.encrypted_private_key, INTERNAL_CRYPTO_SECRET);
         return true;
@@ -532,7 +538,7 @@ export async function getActivePublicKey() {
         );
     }
 
-    if (env.IS_DEV && !canDecryptPrivateKey(active)) {
+    if (env.IS_DEV && active.encrypted_private_key && !canDecryptPrivateKey(active)) {
         active.status = "revoked";
         active.revoked_at = new Date().toISOString();
         active.revocation_reason = "dev key could not be decrypted with current local secret";
@@ -578,7 +584,7 @@ export async function getActivePublicKey() {
  */
 export async function getActivePublicKeyForOwner({ ownerType = "organization", ownerId = "default" } = {}) {
     const keystore = await ensureKeystoreInitialized();
-    const active = keystore.keys.find((k) =>
+    let active = keystore.keys.find((k) =>
         k.status === "active" &&
         String(k.owner_type || "organization") === String(ownerType) &&
         String(k.owner_id || "default") === String(ownerId)
@@ -591,9 +597,161 @@ export async function getActivePublicKeyForOwner({ ownerType = "organization", o
         );
     }
 
+    if (env.IS_DEV && active.encrypted_private_key && !canDecryptPrivateKey(active)) {
+        active.status = "revoked";
+        active.revoked_at = new Date().toISOString();
+        active.revocation_reason = "dev owner key could not be decrypted with current local secret";
+        active = await createKeyEntry(INTERNAL_CRYPTO_SECRET, {
+            ownerType: active.owner_type || ownerType,
+            ownerId: active.owner_id || ownerId,
+            ownerName: active.owner_name || "Local Demo Key Owner",
+        });
+        keystore.keys.push(active);
+        writeKeystore(keystore);
+    }
+
     return {
         ...toPublicMetadata(active),
         public_key: active.public_key,
+    };
+}
+
+/**
+ * Return an active owner key, creating one when no active key exists. This is
+ * useful for demo/local encrypted backup flows. Production can provision keys
+ * explicitly and avoid this helper.
+ *
+ * @param {{ ownerType?: string, ownerId?: string, ownerName?: string }} input
+ * @returns {Promise<Object>}
+ */
+export async function getOrCreateActivePublicKeyForOwner({
+    ownerType = "organization",
+    ownerId = "default",
+    ownerName = "Default Public Service Authority",
+} = {}) {
+    try {
+        return await getActivePublicKeyForOwner({ ownerType, ownerId });
+    } catch (err) {
+        if (!(err instanceof KeyManagerError) || err.code !== "NO_ACTIVE_KEY") {
+            throw err;
+        }
+    }
+
+    const keystore = await ensureKeystoreInitialized();
+    const entry = await createKeyEntry(INTERNAL_CRYPTO_SECRET, {
+        ownerType,
+        ownerId,
+        ownerName,
+    });
+    keystore.keys.push(entry);
+    writeKeystore(keystore);
+
+    safeAuditKeyAccess({
+        keyId: entry.key_id,
+        actor: "system",
+        ipAddress: null,
+        accessType: "generate",
+        result: "success",
+    });
+
+    return {
+        ...toPublicMetadata(entry),
+        public_key: entry.public_key,
+    };
+}
+
+/**
+ * Register a public-only key owned by a user/device or organization. This is
+ * the production path for officer personal keys: the backend stores only the
+ * public key and verifies signatures created by the officer's device/token.
+ *
+ * @param {{
+ *   ownerType?: "user" | "organization",
+ *   ownerId: string,
+ *   ownerName?: string,
+ *   publicKey: string,
+ *   algorithm?: string,
+ *   provider?: string,
+ *   validFrom?: string,
+ *   validTo?: string | null,
+ * }} input
+ * @returns {Promise<Object>}
+ */
+export async function registerExternalPublicKeyForOwner({
+    ownerType = "user",
+    ownerId,
+    ownerName = "",
+    publicKey,
+    algorithm = ALGORITHM,
+    provider = "external-device",
+    validFrom = new Date().toISOString(),
+    validTo = null,
+} = {}) {
+    if (!VALID_OWNER_TYPES.has(ownerType)) {
+        throw new KeyManagerError("INVALID_KEY_OWNER", "ownerType must be 'user' or 'organization'");
+    }
+    if (!ownerId || typeof ownerId !== "string") {
+        throw new KeyManagerError("INVALID_KEY_OWNER", "ownerId is required");
+    }
+    if (algorithm !== ALGORITHM) {
+        throw new KeyManagerError("INVALID_ALGORITHM", `algorithm must be ${ALGORITHM}`);
+    }
+    if (!VALID_EXTERNAL_PROVIDERS.has(provider)) {
+        throw new KeyManagerError("INVALID_PROVIDER", "provider is not allowed for external public keys");
+    }
+    if (!publicKey || typeof publicKey !== "string") {
+        throw new KeyManagerError("INVALID_PUBLIC_KEY", "publicKey is required");
+    }
+
+    const decoded = Buffer.from(publicKey, "base64");
+    if (decoded.length !== FALCON512_PUBLIC_KEY_BYTES) {
+        throw new KeyManagerError(
+            "INVALID_PUBLIC_KEY",
+            `Falcon-512 public key must decode to ${FALCON512_PUBLIC_KEY_BYTES} bytes`
+        );
+    }
+
+    const keystore = await ensureKeystoreInitialized();
+    const now = new Date().toISOString();
+    for (const key of keystore.keys) {
+        if (
+            key.status === "active" &&
+            String(key.owner_type || "organization") === String(ownerType) &&
+            String(key.owner_id || "default") === String(ownerId)
+        ) {
+            key.status = "retired";
+            key.rotated_at = now;
+        }
+    }
+
+    const entry = {
+        key_id: newKeyId({ ownerType, ownerId }),
+        algorithm,
+        provider,
+        status: "active",
+        owner_type: ownerType,
+        owner_id: String(ownerId),
+        owner_name: ownerName || String(ownerId),
+        public_key: publicKey,
+        private_key_ref: "external",
+        valid_from: validFrom,
+        valid_to: validTo,
+        created_at: now,
+    };
+    keystore.keys.push(entry);
+    writeKeystore(keystore);
+
+    safeAuditKeyAccess({
+        keyId: entry.key_id,
+        actor: "system",
+        ipAddress: null,
+        accessType: "generate",
+        result: "success",
+    });
+
+    return {
+        ...toPublicMetadata(entry),
+        public_key: entry.public_key,
     };
 }
 
@@ -617,6 +775,23 @@ export async function getPublicKeyById(keyId) {
         ...toPublicMetadata(entry),
         public_key: entry.public_key,
     };
+}
+
+/**
+ * List public keys, optionally filtered by owner type/id.
+ *
+ * @param {{ ownerType?: string, ownerId?: string }} filter
+ * @returns {Promise<Array<Object>>}
+ */
+export async function listPublicKeys({ ownerType = null, ownerId = null } = {}) {
+    const keystore = await ensureKeystoreInitialized();
+    return keystore.keys
+        .filter((entry) => !ownerType || String(entry.owner_type || "organization") === String(ownerType))
+        .filter((entry) => !ownerId || String(entry.owner_id || "default") === String(ownerId))
+        .map((entry) => ({
+            ...toPublicMetadata(entry),
+            public_key: entry.public_key,
+        }));
 }
 
 /**
@@ -690,6 +865,20 @@ export async function getPrivateKey(keyId, internalSecret, context = {}) {
         throw new KeyManagerError(
             "KEY_NOT_FOUND",
             `No key with key_id '${keyId}'`
+        );
+    }
+    if (!entry.encrypted_private_key) {
+        safeAuditKeyAccess({
+            keyId,
+            actor,
+            ipAddress,
+            accessType: "read_private",
+            result: "fail",
+            details: { reason: "PUBLIC_ONLY_KEY" },
+        });
+        throw new KeyManagerError(
+            "PUBLIC_ONLY_KEY",
+            `Key '${keyId}' is public-only; private signing must happen on the owner device`
         );
     }
 

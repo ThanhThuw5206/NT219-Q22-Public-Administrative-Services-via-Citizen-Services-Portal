@@ -4,11 +4,12 @@ import {
     verifyDocumentByQr,
     verifyDocumentByUpload
 } from "../controllers/document.controller.js";
-import { getNetworkModel, getPublicSigningKey } from "../controllers/network.controller.js";
+import { getNetworkModel, getPublicSigningKey, listPublicSigningKeys } from "../controllers/network.controller.js";
 
 const router = express.Router();
 
 router.get("/network-model", getNetworkModel);
+router.get("/keys", listPublicSigningKeys);
 router.get("/keys/:keyId", getPublicSigningKey);
 router.get("/documents/verify/:documentId", verifyDocumentByQr);
 router.post("/documents/verify/:documentId", verifyDocumentByUpload);

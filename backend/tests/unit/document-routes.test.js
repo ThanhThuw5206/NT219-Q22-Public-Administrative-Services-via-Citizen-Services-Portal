@@ -13,14 +13,17 @@ describe("document route ordering", () => {
         const pendingIndex = routeIndex("get", "/pending");
         const issuedIndex = routeIndex("get", "/issued");
         const previewFileIndex = routeIndex("get", "/previews/:previewId/file");
+        const signChallengeIndex = routeIndex("post", "/:documentId/sign-challenge");
         const detailIndex = routeIndex("get", "/:documentId");
 
         expect(pendingIndex).toBeGreaterThanOrEqual(0);
         expect(issuedIndex).toBeGreaterThanOrEqual(0);
         expect(previewFileIndex).toBeGreaterThanOrEqual(0);
+        expect(signChallengeIndex).toBeGreaterThanOrEqual(0);
         expect(detailIndex).toBeGreaterThanOrEqual(0);
         expect(pendingIndex).toBeLessThan(detailIndex);
         expect(issuedIndex).toBeLessThan(detailIndex);
         expect(previewFileIndex).toBeLessThan(detailIndex);
+        expect(signChallengeIndex).toBeLessThan(detailIndex);
     });
 });

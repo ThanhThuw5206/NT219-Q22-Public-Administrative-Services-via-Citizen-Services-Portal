@@ -17,6 +17,7 @@ import {
     issueDocument,
     submitDocumentHandler,
     signDocumentHandler,
+    createSigningChallengeHandler,
     rejectDocumentHandler
 } from "../controllers/document.controller.js";
 
@@ -42,6 +43,7 @@ router.get("/pending", authenticate, requireRole("officer", "admin"), listPendin
 router.get("/issued", authenticate, requireRole("officer", "admin"), listIssuedDocuments);
 router.get("/rejected", authenticate, requireRole("officer", "admin"), listRejectedDocuments);
 router.post("/upload", authenticate, requireRole("officer", "admin"), uploadDocument);
+router.post("/:documentId/sign-challenge", authenticate, requireRole("officer", "admin"), createSigningChallengeHandler);
 router.post("/:documentId/sign", authenticate, requireRole("officer", "admin"), signDocumentHandler);
 router.post("/:documentId/reject", authenticate, requireRole("officer", "admin"), rejectDocumentHandler);
 

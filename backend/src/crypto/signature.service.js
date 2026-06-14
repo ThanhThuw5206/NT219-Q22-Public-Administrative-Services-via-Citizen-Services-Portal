@@ -39,7 +39,11 @@
 
 import * as falconService from "./falcon/falcon.service.js";
 import * as keyManagerService from "./key-manager.service.js";
-import { INTERNAL_CRYPTO_SECRET } from "../config/env.config.js";
+import {
+    ALLOW_FILE_ORGANIZATION_SEAL_IN_PRODUCTION,
+    INTERNAL_CRYPTO_SECRET,
+    IS_DEV,
+} from "../config/env.config.js";
 
 const ALGORITHM = "FALCON-512";
 const PROVIDER = "crypto-zone";
@@ -107,6 +111,9 @@ export const buildSignaturePayload = ({
     purpose,
     signer,
     organization,
+    action,
+    challengeId,
+    nonce,
 } = {}) => {
     return falconService.signaturePayload({
         documentId,
@@ -119,6 +126,9 @@ export const buildSignaturePayload = ({
         purpose,
         signer,
         organization,
+        action,
+        challengeId,
+        nonce,
         version: "1.0",
     });
 };
@@ -145,13 +155,35 @@ export const buildSignaturePayload = ({
  */
 export const signPayload = async (payload) => {
     const activeKey = await keyManagerService.getActivePublicKey();
+    if (!IS_DEV && activeKey.provider === "file" && !ALLOW_FILE_ORGANIZATION_SEAL_IN_PRODUCTION) {
+        throw new Error(
+            "File-based organization seal key is disabled in production. Configure HSM/KMS signing or explicitly allow file provider."
+        );
+    }
+    return signPayloadWithKey(payload, activeKey.key_id);
+};
+
+/**
+ * Sign a canonical payload with a specific Falcon key id.
+ *
+ * @param {string | Object} payload
+ * @param {string} keyId
+ * @returns {Promise<{
+ *   signature: string,
+ *   key_id: string,
+ *   algorithm: string,
+ *   provider: string,
+ * }>}
+ */
+export const signPayloadWithKey = async (payload, keyId) => {
+    const key = await keyManagerService.getPublicKeyById(keyId);
     const privateKeyBase64 = await keyManagerService.getPrivateKey(
-        activeKey.key_id,
+        key.key_id,
         INTERNAL_CRYPTO_SECRET
     );
 
     const result = await falconService.sign(payload, privateKeyBase64, {
-        keyId: activeKey.key_id,
+        keyId: key.key_id,
     });
 
     return {

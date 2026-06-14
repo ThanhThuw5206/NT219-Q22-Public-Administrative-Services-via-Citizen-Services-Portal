@@ -18,6 +18,7 @@ import {
     getDocumentsByStatus,
     getDocumentsByOwner,
     processDocument,
+    createSigningChallengeForDocument,
     submitDocument,
     signDocument,
     rejectDocument,
@@ -200,12 +201,31 @@ export const signDocumentHandler = async (req, res) => {
         const result = await signDocument({
             documentId: req.params.documentId,
             officerId: req.user?.id ? String(req.user.id) : "officer",
-            ipAddress: req.ip
+            ipAddress: req.ip,
+            officerSignatureProof: req.body?.officer_signature_proof || req.body?.proof || null
         });
 
         res.status(201).json({
             message: "Document signed and issued successfully",
             documentInfo: result
+        });
+    } catch (error) {
+        const status = error.message.includes("not found") ? 404 : 400;
+        safeError(res, error, status);
+    }
+};
+
+export const createSigningChallengeHandler = async (req, res) => {
+    try {
+        const result = await createSigningChallengeForDocument({
+            documentId: req.params.documentId,
+            officerId: req.user?.id ? String(req.user.id) : "officer",
+            ipAddress: req.ip
+        });
+
+        res.status(201).json({
+            message: "Signing challenge created",
+            data: result
         });
     } catch (error) {
         const status = error.message.includes("not found") ? 404 : 400;
@@ -487,6 +507,11 @@ export const verifyDocumentByUpload = (req, res) => {
 
 /** @deprecated Use previewDocument → submitDocumentHandler → signDocumentHandler */
 export const uploadDocument = (req, res) => {
+    if (!IS_DEV) {
+        return res.status(410).json({
+            message: "Legacy upload signing is disabled in production. Use preview, submit, sign-challenge, and sign with officer proof."
+        });
+    }
     console.warn("[deprecated] POST /upload is deprecated. Use preview → submit → sign flow.");
     upload.single("file")(req, res, async function (err) {
         if (err) {
@@ -519,6 +544,11 @@ export const uploadDocument = (req, res) => {
 
 /** @deprecated Use submitDocumentHandler → signDocumentHandler */
 export const issueDocument = async (req, res) => {
+    if (!IS_DEV) {
+        return res.status(410).json({
+            message: "Legacy issue flow is disabled in production. Use submit and sign with officer proof."
+        });
+    }
     console.warn("[deprecated] POST /issue is deprecated. Use submit → sign flow.");
     try {
         const preview = await getPreviewById(req.body.preview_id);

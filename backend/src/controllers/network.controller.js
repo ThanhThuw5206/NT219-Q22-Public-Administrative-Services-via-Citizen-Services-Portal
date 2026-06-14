@@ -1,6 +1,6 @@
 import { NETWORK_ZONES } from "../config/network.config.js";
 import { getActiveKey } from "../crypto/signature.service.js";
-import { getPublicKeyById } from "../crypto/key-manager.service.js";
+import { getPublicKeyById, listPublicKeys } from "../crypto/key-manager.service.js";
 
 export const getNetworkModel = (req, res) => {
     res.json({
@@ -57,6 +57,24 @@ export const getPublicSigningKey = async (req, res) => {
     } catch (error) {
         res.status(404).json({
             message: "Signing key not found",
+            reason: error.message
+        });
+    }
+};
+
+export const listPublicSigningKeys = async (req, res) => {
+    try {
+        const keys = await listPublicKeys({
+            ownerType: req.query.owner_type || null,
+            ownerId: req.query.owner_id || null
+        });
+        res.json({
+            count: keys.length,
+            keys
+        });
+    } catch (error) {
+        res.status(500).json({
+            message: "Failed to list signing keys",
             reason: error.message
         });
     }

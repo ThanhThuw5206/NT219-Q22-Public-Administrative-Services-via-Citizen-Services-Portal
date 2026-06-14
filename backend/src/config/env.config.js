@@ -27,6 +27,19 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "24h";
 
 const DB_STORAGE_TYPE = process.env.DB_STORAGE_TYPE || "json";
 
+const ALLOW_SERVER_SIDE_PERSONAL_KEYS =
+    process.env.ALLOW_SERVER_SIDE_PERSONAL_KEYS !== undefined
+        ? process.env.ALLOW_SERVER_SIDE_PERSONAL_KEYS === "true"
+        : NODE_ENV !== "production";
+
+const REQUIRE_OFFICER_DEVICE_SIGNATURE =
+    process.env.REQUIRE_OFFICER_DEVICE_SIGNATURE !== undefined
+        ? process.env.REQUIRE_OFFICER_DEVICE_SIGNATURE === "true"
+        : NODE_ENV === "production";
+
+const ALLOW_FILE_ORGANIZATION_SEAL_IN_PRODUCTION =
+    process.env.ALLOW_FILE_ORGANIZATION_SEAL_IN_PRODUCTION === "true";
+
 /**
  * `true` when running outside of `production`. Useful for relaxing checks
  * (e.g. allowing the default crypto secret) in dev/test.
@@ -73,6 +86,9 @@ const env = Object.freeze({
     JWT_EXPIRES_IN,
     IS_DEV,
     DB_STORAGE_TYPE,
+    ALLOW_SERVER_SIDE_PERSONAL_KEYS,
+    REQUIRE_OFFICER_DEVICE_SIGNATURE,
+    ALLOW_FILE_ORGANIZATION_SEAL_IN_PRODUCTION,
 });
 
 export {
@@ -84,6 +100,9 @@ export {
     JWT_EXPIRES_IN,
     IS_DEV,
     DB_STORAGE_TYPE,
+    ALLOW_SERVER_SIDE_PERSONAL_KEYS,
+    REQUIRE_OFFICER_DEVICE_SIGNATURE,
+    ALLOW_FILE_ORGANIZATION_SEAL_IN_PRODUCTION,
 };
 
 export default env;

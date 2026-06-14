@@ -176,6 +176,22 @@ CREATE TABLE document_signatures (
     FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+CREATE TABLE signing_challenges (
+    challenge_id VARCHAR(100) PRIMARY KEY,
+    document_id VARCHAR(50) NOT NULL,
+    officer_id VARCHAR(100) NOT NULL,
+    key_id VARCHAR(150) NOT NULL,
+    payload_json JSON NOT NULL,
+    payload_hash CHAR(64) NOT NULL,
+    nonce VARCHAR(100) NOT NULL,
+    status ENUM('pending', 'used', 'expired', 'revoked') DEFAULT 'pending',
+    ip_address VARCHAR(50) NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    used_at TIMESTAMP NULL,
+    FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- =========================================================================
 -- 9. BẢNG VERIFICATION_TOKENS (Token xác thực QR nhanh)
 -- =========================================================================
