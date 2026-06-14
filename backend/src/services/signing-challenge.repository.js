@@ -48,8 +48,8 @@ const jsonRepo = {
 const mysqlRepo = {
     async createChallenge(record) {
         const challengeId = record.challenge_id || crypto.randomUUID();
-        await db.query(`INSERT INTO signing_challenges (challenge_id, document_id, officer_id, key_id, payload_json, payload_hash, nonce, status, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [challengeId, record.document_id, record.officer_id, record.key_id, record.payload_json, record.payload_hash, record.nonce, record.status || "pending", record.expires_at ? new Date(record.expires_at) : null, record.created_at ? new Date(record.created_at) : new Date()]);
+        await db.query(`INSERT INTO signing_challenges (challenge_id, document_id, officer_id, key_id, payload_json, payload_hash, nonce, status, expires_at, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [challengeId, record.document_id, record.officer_id, record.key_id, record.payload_json, record.payload_hash, record.nonce, record.status || "pending", record.expires_at ? new Date(record.expires_at) : null, record.ip_address || null, record.created_at ? new Date(record.created_at) : new Date()]);
         return { ...record, challenge_id: challengeId };
     },
     async findChallengeById(challengeId) {

@@ -329,7 +329,7 @@ export const processDocument = async (input) => {
         organization,
         ipAddress
     });
-    const evidencePath = writeSignatureEvidenceFile(documentFolder, {
+    const evidencePath = await writeSignatureEvidenceFile(documentFolder, {
         document_id: documentId,
         verify_url: verifyUrl,
         signature_type: "organization_falcon",
@@ -946,7 +946,7 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
         organization,
         ipAddress
     });
-    const evidencePath = writeSignatureEvidenceFile(documentFolder, {
+    const evidencePath = await writeSignatureEvidenceFile(documentFolder, {
         document_id: documentId,
         verify_url: verifyUrl,
         signatures: [

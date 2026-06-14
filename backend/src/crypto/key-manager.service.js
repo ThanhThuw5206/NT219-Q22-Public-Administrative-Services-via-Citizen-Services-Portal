@@ -65,7 +65,7 @@ const GCM_AUTH_TAG_BYTES = 16;
 const AES_GCM_CIPHER = "aes-256-gcm";
 const FALCON512_PUBLIC_KEY_BYTES = 897;
 const VALID_OWNER_TYPES = new Set(["user", "organization"]);
-const VALID_EXTERNAL_PROVIDERS = new Set(["external-device", "smartcard", "pkcs11", "hsm", "kms"]);
+const VALID_EXTERNAL_PROVIDERS = new Set(["external-device", "officer-device", "smartcard", "pkcs11", "hsm", "kms"]);
 
 const LEGACY_PBKDF2_ITERATIONS = 10000;
 const LEGACY_PBKDF2_KEY_BYTES = 32;
