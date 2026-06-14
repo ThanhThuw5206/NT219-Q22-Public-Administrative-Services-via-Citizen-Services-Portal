@@ -173,13 +173,13 @@
                 }
                 tbody.innerHTML = docs.map(doc => `
                     <tr>
-                        <td><strong>${doc.document_id}</strong></td>
-                        <td>${doc.owner_name || doc.owner_id || "-"}</td>
+                        <td><strong>${sanitize(doc.document_id)}</strong></td>
+                        <td>${sanitize(doc.owner_name || doc.owner_id || "-")}</td>
                         <td>${new Date(doc.created_at).toLocaleString("vi-VN")}</td>
                         <td>
-                            <button onclick="viewDoc('${doc.document_id}')" class="btn btn-sm btn-outline">Xem</button>
-                            <button onclick="signDoc('${doc.document_id}')" class="btn btn-sm btn-success">Ký số</button>
-                            <button onclick="openRejectModal('${doc.document_id}')" class="btn btn-sm" style="background:#b91c1c;color:#fff;border:none;cursor:pointer">Từ chối</button>
+                            <button onclick="viewDoc('${sanitize(doc.document_id)}')" class="btn btn-sm btn-outline">Xem</button>
+                            <button onclick="signDoc('${sanitize(doc.document_id)}')" class="btn btn-sm btn-success">Ký số</button>
+                            <button onclick="openRejectModal('${sanitize(doc.document_id)}')" class="btn btn-sm" style="background:#b91c1c;color:#fff;border:none;cursor:pointer">Từ chối</button>
                         </td>
                     </tr>
                 `).join("");
@@ -198,12 +198,12 @@
                 }
                 tbody.innerHTML = docs.map(doc => `
                     <tr>
-                        <td><strong>${doc.document_id}</strong></td>
-                        <td>${doc.owner_name || doc.owner_id || "-"}</td>
+                        <td><strong>${sanitize(doc.document_id)}</strong></td>
+                        <td>${sanitize(doc.owner_name || doc.owner_id || "-")}</td>
                         <td>${new Date(doc.signed_at).toLocaleString("vi-VN")}</td>
                         <td>
-                            <button onclick="viewDoc('${doc.document_id}')" class="btn btn-sm btn-outline">Xem</button>
-                            <button onclick="downloadDocument('${doc.document_id}')" class="btn btn-sm btn-primary">Tải PDF</button>
+                            <button onclick="viewDoc('${sanitize(doc.document_id)}')" class="btn btn-sm btn-outline">Xem</button>
+                            <button onclick="downloadDocument('${sanitize(doc.document_id)}', '⚠️ Không thể tải xuống: File PDF đã bị sửa đổi sau khi ký số. Vui lòng thông báo với người dân.')" class="btn btn-sm btn-primary">Tải PDF</button>
                         </td>
                     </tr>
                 `).join("");
@@ -219,16 +219,16 @@
                 document.getElementById("detailContent").innerHTML = `
                     <div class="detail-grid">
                         <div class="detail-label">Mã hồ sơ</div>
-                        <div class="detail-value">${doc.document_id}</div>
+                        <div class="detail-value">${sanitize(doc.document_id)}</div>
                         <div class="detail-label">Trạng thái</div>
-                        <div class="detail-value"><span class="badge badge-${doc.status}">${doc.status}</span></div>
+                        <div class="detail-value"><span class="badge badge-${sanitize(doc.status)}">${sanitize(doc.status)}</span></div>
                         <div class="detail-label">Người nộp</div>
-                        <div class="detail-value">${doc.owner_name || doc.owner_id || "-"}</div>
+                        <div class="detail-value">${sanitize(doc.owner_name || doc.owner_id || "-")}</div>
                         <div class="detail-label">Ngày tạo</div>
                         <div class="detail-value">${new Date(doc.created_at).toLocaleString("vi-VN")}</div>
                         ${doc.rejection_reason ? `
                         <div class="detail-label">Lý do từ chối</div>
-                        <div class="detail-value" style="color:#b91c1c">${doc.rejection_reason}</div>
+                        <div class="detail-value" style="color:#b91c1c">${sanitize(doc.rejection_reason)}</div>
                         <div class="detail-label">Ngày từ chối</div>
                         <div class="detail-value">${doc.rejected_at ? new Date(doc.rejected_at).toLocaleString("vi-VN") : "-"}</div>
                         ` : ""}
@@ -236,16 +236,16 @@
                         <div class="detail-label">Ngày ký</div>
                         <div class="detail-value">${new Date(doc.signed_at).toLocaleString("vi-VN")}</div>
                         <div class="detail-label">Hash</div>
-                        <div class="detail-value" style="font-size:12px">${doc.file_hash || "-"}</div>
+                        <div class="detail-value" style="font-size:12px">${sanitize(doc.file_hash || "-")}</div>
                         <div class="detail-label">Chữ ký</div>
                         <div class="detail-value" style="font-size:12px;word-break:break-all">
                             ${doc.signature && doc.signature.length > 70 ? `
-                                <span id="sigShort">${doc.signature.substring(0, 70)}... <a href="#" onclick="event.preventDefault();document.getElementById('sigShort').style.display='none';document.getElementById('sigFull').style.display='inline'" style="font-size:11px">Xem thêm</a></span>
-                                <span id="sigFull" style="display:none">${doc.signature} <a href="#" onclick="event.preventDefault();document.getElementById('sigFull').style.display='none';document.getElementById('sigShort').style.display='inline'" style="font-size:11px">Thu gọn</a></span>
-                            ` : (doc.signature || "-")}
+                                <span id="sigShort">${sanitize(doc.signature.substring(0, 70))}... <a href="#" onclick="event.preventDefault();document.getElementById('sigShort').style.display='none';document.getElementById('sigFull').style.display='inline'" style="font-size:11px">Xem thêm</a></span>
+                                <span id="sigFull" style="display:none">${sanitize(doc.signature)} <a href="#" onclick="event.preventDefault();document.getElementById('sigFull').style.display='none';document.getElementById('sigShort').style.display='inline'" style="font-size:11px">Thu gọn</a></span>
+                            ` : sanitize(doc.signature || "-")}
                         </div>
                         <div class="detail-label">Verify URL</div>
-                        <div class="detail-value"><a href="${doc.verify_url}" target="_blank">${doc.verify_url || "-"}</a></div>
+                        <div class="detail-value"><a href="${sanitize(doc.verify_url)}" target="_blank">${sanitize(doc.verify_url || "-")}</a></div>
                         ` : ""}
                     </div>
                 `;
@@ -283,9 +283,9 @@
             }
         }
 
-        async function signDocFromModal(docId) {
+        async function signDoc(docId, closeModal = false) {
             if (!confirm(`Xác nhận ký số hồ sơ ${docId}?`)) return;
-            closeDetail();
+            if (closeModal) closeDetail();
             try {
                 const res = await apiPost(`/app/documents/${docId}/sign`, {});
                 showAlert(`Ký số thành công! Hồ sơ ${res.documentInfo.document_id}`, "success");
@@ -295,47 +295,15 @@
             }
         }
 
-        async function signDoc(docId) {
-            if (!confirm(`Xác nhận ký số hồ sơ ${docId}?`)) return;
-            try {
-                const res = await apiPost(`/app/documents/${docId}/sign`, {});
-                showAlert(`Ký số thành công! Hồ sơ ${res.documentInfo.document_id}`, "success");
-                loadPending();
-            } catch (err) {
-                showAlert(err.message, "error");
-            }
+        function signDocFromModal(docId) {
+            return signDoc(docId, true);
         }
 
         function closeDetail() {
             document.getElementById("detailModal").style.display = "none";
         }
 
-        async function downloadDocument(docId) {
-            try {
-                const res = await apiFetch(`/app/documents/${docId}/signed-pdf`);
-                if (!res) return;
-                if (!res.ok) {
-                    const data = await res.json().catch(() => ({}));
-                    if (data.tampered) {
-                        showAlert("⚠️ Không thể tải xuống: File PDF đã bị sửa đổi sau khi ký số. Vui lòng thông báo với người dân.", "error");
-                    } else {
-                        showAlert(data.message || "Tải xuống thất bại", "error");
-                    }
-                    return;
-                }
-                const blob = await res.blob();
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = `${docId}-signed.pdf`;
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-            } catch (err) {
-                showAlert(err.message, "error");
-            }
-        }
+        // downloadDocument and showAlert are now in ../js/api.js (shared)
 
         async function loadRejected() {
             try {
@@ -347,11 +315,11 @@
                 }
                 tbody.innerHTML = docs.map(doc => `
                     <tr>
-                        <td><strong>${doc.document_id}</strong></td>
-                        <td>${doc.owner_name || doc.owner_id || "-"}</td>
+                        <td><strong>${sanitize(doc.document_id)}</strong></td>
+                        <td>${sanitize(doc.owner_name || doc.owner_id || "-")}</td>
                         <td>${doc.rejected_at ? new Date(doc.rejected_at).toLocaleString("vi-VN") : "-"}</td>
-                        <td style="max-width:260px;word-break:break-word">${doc.rejection_reason || "-"}</td>
-                        <td><button onclick="viewDoc('${doc.document_id}')" class="btn btn-sm btn-outline">Xem</button></td>
+                        <td style="max-width:260px;word-break:break-word">${sanitize(doc.rejection_reason || "-")}</td>
+                        <td><button onclick="viewDoc('${sanitize(doc.document_id)}')" class="btn btn-sm btn-outline">Xem</button></td>
                     </tr>
                 `).join("");
             } catch (err) {
@@ -390,13 +358,7 @@
             }
         }
 
-        function showAlert(msg, type) {
-            const el = document.getElementById("alertBox");
-            el.className = `alert alert-${type}`;
-            el.textContent = msg;
-            el.style.display = "block";
-            setTimeout(() => el.style.display = "none", 5000);
-        }
+        // showAlert is now in ../js/api.js (shared)
     </script>
 </body>
 </html>

@@ -61,9 +61,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadDirectory = path.resolve(__dirname, "../uploads");
 
-const uploadFolder = "src/uploads/";
-if (!fs.existsSync(uploadFolder)) {
-    fs.mkdirSync(uploadFolder, { recursive: true });
+if (!fs.existsSync(uploadDirectory)) {
+    fs.mkdirSync(uploadDirectory, { recursive: true });
 }
 
 /** Cấu hình multer: chỉ chấp nhận file PDF, lưu vào thư mục uploads */
@@ -275,7 +274,7 @@ export const listRejectedDocuments = async (req, res) => {
         const documents = await getDocumentsByStatus("rejected");
         res.json(documents);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        safeError(res, error);
     }
 };
 
@@ -295,7 +294,7 @@ export const rejectDocumentHandler = async (req, res) => {
         res.status(200).json({ message: "Hồ sơ đã bị từ chối", data: result });
     } catch (error) {
         const status = error.message.includes("not found") ? 404 : 400;
-        res.status(status).json({ message: error.message });
+        safeError(res, error, status);
     }
 };
 

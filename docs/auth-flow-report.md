@@ -166,6 +166,7 @@ Ví dụ route nghiệp vụ:
 | `POST /api/app/documents/submit` | `authenticate` | Người dùng đã đăng nhập được nộp hồ sơ. |
 | `GET /api/app/documents/:documentId/download` | `authenticate` | Chỉ người có token hợp lệ được vào controller tải file; controller tiếp tục kiểm tra quyền truy cập hồ sơ. |
 | `GET /api/app/documents/pending` | `authenticate` + `requireRole("officer", "admin")` | Chỉ cán bộ/admin xem hồ sơ chờ xử lý. |
+| `POST /api/app/documents/:documentId/sign-challenge` | `authenticate` + `requireRole("officer", "admin")` | Chỉ cán bộ/admin tạo challenge để thiết bị cá nhân ký duyệt hồ sơ. |
 | `POST /api/app/documents/:documentId/sign` | `authenticate` + `requireRole("officer", "admin")` | Chỉ cán bộ/admin ký số và phát hành hồ sơ. |
 
 Các endpoint public verify nằm ở `/api/public/documents/verify/:documentId` không yêu cầu đăng nhập, vì chúng xác minh tài liệu bằng `documentId` và token QR riêng.

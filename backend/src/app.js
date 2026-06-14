@@ -6,7 +6,20 @@ const app = express();
 
 // Security headers
 app.use(helmet({
-    contentSecurityPolicy: false, // Disable CSP for now (frontend uses inline scripts)
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],  // Frontend uses inline scripts
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
+            imgSrc: ["'self'", "data:", "blob:"],
+            connectSrc: ["'self'"],
+            frameSrc: ["'self'", "blob:"],
+            objectSrc: ["'none'"],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+        }
+    },
     crossOriginEmbedderPolicy: false // Allow embedding
 }));
 

@@ -62,8 +62,8 @@ export const loginHandler = async (req, res) => {
         // Set JWT in httpOnly cookie (not accessible via JS = XSS protection)
         res.cookie("token", result.token, COOKIE_OPTIONS);
 
-        // Also return token in response body for backward compatibility
-        res.json({ message: "Login successful", data: result });
+        // Return user info only (token is in httpOnly cookie, not in body)
+        res.json({ message: "Login successful", data: { user: result.user } });
     } catch (error) {
         res.status(401).json({ message: getSafeAuthError(error) });
     }

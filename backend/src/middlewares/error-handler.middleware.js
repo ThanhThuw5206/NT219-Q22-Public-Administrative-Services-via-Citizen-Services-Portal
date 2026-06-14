@@ -21,8 +21,7 @@ export function errorHandler(err, req, res, _next) {
     // In production, hide internal details for 500 errors
     if (!IS_DEV && statusCode >= 500) {
         return res.status(500).json({
-            message: "Internal server error",
-            ...(IS_DEV && { stack: err.stack })
+            message: "Internal server error"
         });
     }
 

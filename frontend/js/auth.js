@@ -20,7 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             try {
                 const res = await apiPost("/auth/login", { email, password });
-                setAuth(res.data.token, res.data.user);
+                setAuth(null, res.data.user);
 
                 const role = res.data.user.roles[0];
                 if (role === "officer" || role === "admin") {

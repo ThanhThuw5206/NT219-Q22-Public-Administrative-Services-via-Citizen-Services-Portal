@@ -142,6 +142,63 @@ async function apiDownload(path, filename) {
     setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 }
 
+/**
+ * Show alert message in the page's #alertBox element.
+ * @param {string} msg - Message to display
+ * @param {"success"|"error"|"info"} type - Alert type
+ */
+function showAlert(msg, type) {
+    const el = document.getElementById("alertBox");
+    if (!el) return;
+    el.className = `alert alert-${type}`;
+    el.textContent = msg;
+    el.style.display = "block";
+    setTimeout(() => el.style.display = "none", 5000);
+}
+
+/**
+ * Download signed PDF for a document with tamper-check handling.
+ * @param {string} docId - Document ID
+ * @param {string} [tamperedMsg] - Custom message for tampered files
+ */
+async function downloadDocument(docId, tamperedMsg) {
+    try {
+        const res = await apiFetch(`/app/documents/${docId}/signed-pdf`);
+        if (!res) return;
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            if (data.tampered) {
+                showAlert(tamperedMsg || "⚠️ Không thể tải xuống: File PDF đã bị sửa đổi sau khi ký số.", "error");
+            } else {
+                showAlert(data.message || "Tải xuống thất bại", "error");
+            }
+            return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${docId}-signed.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+        showAlert(err.message, "error");
+    }
+}
+
+/** Escape HTML entities to prevent XSS when inserting into innerHTML */
+function sanitize(str) {
+    if (str == null) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
 /** Yêu cầu đăng nhập, chuyển về login.html nếu chưa đăng nhập */
 function requireAuth() {
     if (!isLoggedIn()) {

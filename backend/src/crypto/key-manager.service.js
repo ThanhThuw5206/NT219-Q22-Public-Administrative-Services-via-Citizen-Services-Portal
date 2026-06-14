@@ -32,11 +32,11 @@
  *   - Older AES-256-CBC entries are still readable as a legacy compatibility
  *     path when the original secret is available.
  *
- * Lazy initialisation:
+ * Initialisation:
  *   - We do NOT auto-generate keys at module load time (avoids surprise
- *     side effects on `import`). Instead, the first call to
- *     `getActivePublicKey()` (or any other read/write) will detect a
- *     missing keystore and create one fresh active key.
+ *     side effects on `import`). Production read-only paths also never
+ *     generate key material implicitly; keys must be provisioned explicitly.
+ *     Local/demo write paths may create encrypted file-backed keys.
  *
  * File permissions:
  *   - We `chmod 0600` the keystore on every write. On Windows this is
@@ -452,6 +452,13 @@ async function ensureKeystoreInitialized() {
     return keystore;
 }
 
+function readKeystoreIfExists() {
+    if (!keystoreExists()) {
+        return { keys: [] };
+    }
+    return readKeystore();
+}
+
 /**
  * Strip the on-disk entry down to the public-safe metadata shape returned
  * to API callers. Never includes private-key material.
@@ -528,7 +535,7 @@ export async function generateKeyPair() {
  *   no entry with `status === "active"`.
  */
 export async function getActivePublicKey() {
-    const keystore = await ensureKeystoreInitialized();
+    const keystore = env.IS_DEV ? await ensureKeystoreInitialized() : readKeystoreIfExists();
     let active = keystore.keys.find((k) => k.status === "active");
 
     if (!active) {
@@ -583,7 +590,7 @@ export async function getActivePublicKey() {
  * @returns {Promise<Object>}
  */
 export async function getActivePublicKeyForOwner({ ownerType = "organization", ownerId = "default" } = {}) {
-    const keystore = await ensureKeystoreInitialized();
+    const keystore = readKeystoreIfExists();
     let active = keystore.keys.find((k) =>
         k.status === "active" &&
         String(k.owner_type || "organization") === String(ownerType) &&
@@ -637,7 +644,7 @@ export async function getOrCreateActivePublicKeyForOwner({
         }
     }
 
-    const keystore = await ensureKeystoreInitialized();
+    const keystore = keystoreExists() ? readKeystore() : { keys: [] };
     const entry = await createKeyEntry(INTERNAL_CRYPTO_SECRET, {
         ownerType,
         ownerId,
@@ -711,7 +718,7 @@ export async function registerExternalPublicKeyForOwner({
         );
     }
 
-    const keystore = await ensureKeystoreInitialized();
+    const keystore = readKeystoreIfExists();
     const now = new Date().toISOString();
     for (const key of keystore.keys) {
         if (
@@ -763,7 +770,7 @@ export async function registerExternalPublicKeyForOwner({
  * @returns {Promise<Object>}
  */
 export async function getPublicKeyById(keyId) {
-    const keystore = await ensureKeystoreInitialized();
+    const keystore = readKeystoreIfExists();
     const entry = keystore.keys.find((k) => k.key_id === keyId);
     if (!entry) {
         throw new KeyManagerError(
@@ -784,7 +791,7 @@ export async function getPublicKeyById(keyId) {
  * @returns {Promise<Array<Object>>}
  */
 export async function listPublicKeys({ ownerType = null, ownerId = null } = {}) {
-    const keystore = await ensureKeystoreInitialized();
+    const keystore = readKeystoreIfExists();
     return keystore.keys
         .filter((entry) => !ownerType || String(entry.owner_type || "organization") === String(ownerType))
         .filter((entry) => !ownerId || String(entry.owner_id || "default") === String(ownerId))
@@ -999,7 +1006,7 @@ export async function revokeKey(keyId, context = {}) {
  * @throws {KeyManagerError} 'KEY_NOT_FOUND'
  */
 export async function getKeyMetadata(keyId) {
-    const keystore = await ensureKeystoreInitialized();
+    const keystore = readKeystoreIfExists();
     const entry = keystore.keys.find((k) => k.key_id === keyId);
     if (!entry) {
         throw new KeyManagerError(

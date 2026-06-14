@@ -35,6 +35,28 @@ const buildVerifyUrl = (documentId, token) => {
     return `${baseUrl}/${documentId}?token=${token}`;
 };
 
+const getCurrentOriginalFileHash = async (document) => {
+    if (!document?.file_path) {
+        throw new Error("Original PDF file path is missing");
+    }
+
+    const currentHash = await hashFile(document.file_path);
+    const recordedHash = document.original_file_hash || document.file_hash || null;
+    if (recordedHash && recordedHash !== currentHash) {
+        throw new Error("Original PDF hash mismatch; document file may have changed after submission");
+    }
+
+    return currentHash;
+};
+
+const parseSignaturePayload = (payloadJson) => {
+    try {
+        return JSON.parse(payloadJson);
+    } catch {
+        throw new Error("Signing challenge payload is invalid");
+    }
+};
+
 const DEFAULT_ORGANIZATION = {
     organization_id: process.env.DEFAULT_ORGANIZATION_ID || "PUBLIC-AUTHORITY-DEMO",
     name: process.env.DEFAULT_ORGANIZATION_NAME || "Demo Public Administrative Authority"
@@ -480,63 +502,6 @@ export const verifyDocument = async ({ documentId, token, filePath = null, userI
         organization_signature_valid: organizationVerified ? organizationVerified.valid : validV2,
         signatures: verifiedSignatures
     };
-
-    // Khi không có file upload → hash file thật trên đĩa để phát hiện giả mạo
-    // Không được dùng document.file_hash để so sánh với chính nó (luôn khớp)
-    let currentHash;
-    if (filePath) {
-        currentHash = await hashFile(filePath);
-    } else if (document.signed_pdf_path && fs.existsSync(document.signed_pdf_path)) {
-        currentHash = await hashFile(document.signed_pdf_path);
-    } else {
-        currentHash = document.file_hash;
-    }
-    const hashMatched = currentHash === document.file_hash;
-
-    // Lấy issuedAt từ signature_payload đã lưu để giữ đúng precision (ms)
-    // MySQL TIMESTAMP chỉ lưu đến giây → document.signed_at mất milliseconds
-    const sp = document.signature_payload;
-    const issuedAt = (sp && typeof sp === "object" ? sp.issued_at : null)
-        || (document.signed_at instanceof Date
-            ? document.signed_at.toISOString()
-            : String(document.signed_at || ""));
-
-    const payload = buildSignaturePayload({
-        documentId,
-        fileHash: currentHash,
-        issuedAt,
-        keyId: document.public_key_id,
-        version: 1
-    });
-    const signatureValid = await verifyPayloadSignature({
-        payload,
-        signature: document.signature,
-        publicKey: document.public_key
-    });
-    const valid = hashMatched && signatureValid;
-
-    await writeAuditLog({
-        action: "verify",
-        documentId,
-        userId,
-        ipAddress,
-        result: valid ? "success" : "fail"
-    });
-
-    return {
-        valid,
-        reason: valid ? "VALID_DOCUMENT" : "TAMPERED_OR_INVALID_SIGNATURE",
-        document_id: document.document_id,
-        file_hash: document.file_hash,
-        current_hash: currentHash,
-        hash_matched: hashMatched,
-        signature_valid: signatureValid,
-        algorithm: document.algorithm,
-        signature_provider: document.signature_provider,
-        public_key_id: document.public_key_id,
-        status: document.status,
-        signed_at: document.signed_at
-    };
 };
 
 /** Lấy thông tin chi tiết một tài liệu theo documentId, bao gồm tên người nộp */
@@ -689,7 +654,7 @@ export const createSigningChallengeForDocument = async ({ documentId, officerId 
 
     const { signer, organization } = await resolveSignerContext(officerId);
     const officerKey = await getOfficerPersonalKey(signer);
-    const originalHash = document.original_file_hash || await hashFile(document.file_path);
+    const originalHash = await getCurrentOriginalFileHash(document);
     const challengeId = crypto.randomUUID();
     const nonce = crypto.randomBytes(32).toString("base64url");
     const issuedAt = new Date().toISOString();
@@ -771,6 +736,15 @@ const verifyOfficerSignatureProof = async ({
     }
 
     const publicKey = await getPublicKeyById(challenge.key_id);
+    const challengePayload = parseSignaturePayload(challenge.payload_json);
+    if (
+        challengePayload.action !== "approve_document" ||
+        String(challengePayload.document_id) !== String(documentId) ||
+        String(challengePayload.key_id) !== String(challenge.key_id) ||
+        !challengePayload.file_hash
+    ) {
+        throw new Error("Signing challenge payload does not match the approval request");
+    }
     const signatureValid = await verifyPayloadSignature({
         payload: challenge.payload_json,
         signature,
@@ -784,26 +758,7 @@ const verifyOfficerSignatureProof = async ({
     if (!usedChallenge) {
         throw new Error("Signing challenge was already used");
     }
-    const { signer, organization } = await resolveSignerContext(officerId);
-    const document = await findDocumentById(documentId);
-    const record = await createFalconSignatureRecord({
-        document,
-        signedFileHash: document.original_file_hash || document.file_hash,
-        issuedAt: new Date().toISOString(),
-        activeKey: publicKey,
-        signatureInfo: {
-            signature,
-            key_id: publicKey.key_id,
-            algorithm: publicKey.algorithm,
-            provider: publicKey.provider || "external-device"
-        },
-        payload: challenge.payload_json,
-        signer,
-        organization,
-        ipAddress,
-        reason: "Officer approval before public document issuance",
-        signatureType: "officer_personal_falcon"
-    });
+    const signedAt = new Date().toISOString();
 
     return {
         signatureInfo: {
@@ -815,8 +770,8 @@ const verifyOfficerSignatureProof = async ({
         payload: challenge.payload_json,
         payload_hash: challenge.payload_hash,
         key: publicKey,
-        record,
-        signed_at: record.signed_at || new Date().toISOString()
+        approved_file_hash: challengePayload.file_hash || null,
+        signed_at: signedAt
     };
 };
 
@@ -842,13 +797,16 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
     const token = generateVerificationToken();
     const verifyUrl = buildVerifyUrl(documentId, token);
     const { signer, organization } = await resolveSignerContext(officerId);
-    const originalHash = document.original_file_hash || await hashFile(document.file_path);
+    const originalHash = await getCurrentOriginalFileHash(document);
     let officerApproval = await verifyOfficerSignatureProof({
         documentId,
         officerId,
         proof: officerSignatureProof,
         ipAddress
     });
+    if (officerApproval?.approved_file_hash && officerApproval.approved_file_hash !== originalHash) {
+        throw new Error("Officer approval does not match current original PDF hash");
+    }
     if (!officerApproval) {
         const officerKey = await getOfficerPersonalKey(signer);
         const approvalPayload = buildSignaturePayload({
@@ -872,25 +830,12 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
             }
             throw error;
         }
-        const officerSignatureRecord = await createFalconSignatureRecord({
-            document,
-            signedFileHash: originalHash,
-            issuedAt,
-            activeKey: officerKey,
-            signatureInfo: officerSignatureInfo,
-            payload: approvalPayload,
-            signer,
-            organization,
-            ipAddress,
-            reason: "Officer approval before public document issuance",
-            signatureType: "officer_personal_falcon"
-        });
         officerApproval = {
             signatureInfo: officerSignatureInfo,
             payload: approvalPayload,
             payload_hash: hashText(approvalPayload),
             key: officerKey,
-            record: officerSignatureRecord,
+            approved_file_hash: originalHash,
             signed_at: issuedAt
         };
     }
@@ -939,6 +884,21 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
         purpose: "Issue public administrative document",
     });
     const signatureInfo = await signPayload(payload);
+    const officerSignatureRecord = await createFalconSignatureRecord({
+        document,
+        signedFileHash: originalHash,
+        issuedAt: officerApproval.signed_at || issuedAt,
+        activeKey: officerApproval.key,
+        signatureInfo: officerApproval.signatureInfo,
+        payload: officerApproval.payload,
+        signer,
+        organization,
+        ipAddress,
+        reason: "Officer approval before public document issuance",
+        signatureType: "officer_personal_falcon"
+    });
+    officerApproval.record = officerSignatureRecord;
+
     const signatureRecord = await createFalconSignatureRecord({
         document,
         signedFileHash: fileHash,
