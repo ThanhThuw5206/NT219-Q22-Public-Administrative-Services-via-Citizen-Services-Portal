@@ -6,7 +6,9 @@ import crypto from "crypto";
 import fs from "fs";
 import { hashFile, hashText } from "../crypto/hash.service.js";
 import { saveDocument, updateDocument, findDocumentById, listDocuments } from "./document.repository.js";
+import { createSignature, getLatestSignatureByDocumentId } from "./signature.repository.js";
 import { buildSignaturePayload, getActiveKey, signPayload, verifyPayloadSignature } from "../crypto/signature.service.js";
+import { getPublicKeyById } from "../crypto/key-manager.service.js";
 import { writeAuditLog } from "./audit.service.js";
 import { getUserById } from "./auth.service.js";
 import path from "path";
@@ -31,6 +33,111 @@ const buildVerifyUrl = (documentId, token) => {
     return `${baseUrl}/${documentId}?token=${token}`;
 };
 
+const DEFAULT_ORGANIZATION = {
+    organization_id: process.env.DEFAULT_ORGANIZATION_ID || "PUBLIC-AUTHORITY-DEMO",
+    name: process.env.DEFAULT_ORGANIZATION_NAME || "Demo Public Administrative Authority"
+};
+
+const normalizeRole = (roles = []) => {
+    if (roles.includes("admin")) return "admin";
+    if (roles.includes("officer")) return "officer";
+    return roles[0] || "officer";
+};
+
+const resolveSignerContext = async (officerId) => {
+    const officer = await getUserById(officerId);
+    const roles = officer?.roles || ["officer"];
+    return {
+        signer: {
+            user_id: String(officer?.id || officerId || "officer"),
+            full_name: officer?.full_name || "Authorized Officer",
+            role: normalizeRole(roles)
+        },
+        organization: DEFAULT_ORGANIZATION
+    };
+};
+
+const normalizeSignatureRecord = (record) => {
+    if (!record) return null;
+    const payloadJson = record.signature_payload_json || record.signature_payload;
+    let payload = null;
+    if (payloadJson) {
+        try {
+            payload = typeof payloadJson === "string" ? JSON.parse(payloadJson) : payloadJson;
+        } catch {
+            payload = null;
+        }
+    }
+    return {
+        signature_id: record.signature_id || record.id || null,
+        signature_type: record.signature_type || "organization_falcon",
+        signature_value: record.signature_value || record.signature,
+        signature_payload_json: typeof payloadJson === "string" ? payloadJson : JSON.stringify(payloadJson || {}),
+        signature_payload: payload,
+        payload_hash: record.payload_hash || null,
+        signed_file_hash: record.signed_file_hash || record.file_hash,
+        original_file_hash: record.original_file_hash || null,
+        algorithm: record.algorithm || "FALCON-512",
+        key_id: record.key_id || record.public_key_id,
+        public_key: record.public_key || null,
+        signer: {
+            user_id: String(record.signer_user_id || payload?.signer?.user_id || ""),
+            full_name: record.signer_full_name || payload?.signer?.full_name || "",
+            role: record.signer_role || payload?.signer?.role || ""
+        },
+        organization: {
+            organization_id: record.organization_id || payload?.organization?.organization_id || "",
+            name: record.organization_name || payload?.organization?.name || ""
+        },
+        signed_at: record.signed_at,
+        signing_reason: record.signing_reason || payload?.purpose || null,
+        signature_status: record.signature_status || "active"
+    };
+};
+
+const createFalconSignatureRecord = async ({
+    document,
+    signedFileHash,
+    issuedAt,
+    activeKey,
+    signatureInfo,
+    payload,
+    signer,
+    organization,
+    ipAddress,
+    reason = "Issue public administrative document",
+}) => {
+    return createSignature({
+        document_id: document.document_id,
+        signature_type: "organization_falcon",
+        signature_value: signatureInfo.signature,
+        signature_payload_json: payload,
+        payload_hash: hashText(payload),
+        signed_file_hash: signedFileHash,
+        file_hash: signedFileHash,
+        original_file_hash: document.original_file_hash || null,
+        algorithm: signatureInfo.algorithm,
+        key_id: signatureInfo.key_id,
+        public_key_id: signatureInfo.key_id,
+        public_key: activeKey.public_key,
+        signer_user_id: signer.user_id,
+        signer_full_name: signer.full_name,
+        signer_role: signer.role,
+        organization_id: organization.organization_id,
+        organization_name: organization.name,
+        signed_at: issuedAt,
+        signing_ip: ipAddress,
+        signing_reason: reason,
+        signature_status: "active"
+    });
+};
+
+const writeSignatureEvidenceFile = (documentFolder, evidence) => {
+    const evidencePath = path.join(documentFolder, "signature-evidence.json");
+    fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2));
+    return evidencePath;
+};
+
 /**
  * Xử lý tài liệu trọn gói (legacy): nộp + ký số + sinh QR trong một bước.
  * Dùng cho flow officer upload trực tiếp qua POST /upload.
@@ -50,8 +157,9 @@ export const processDocument = async (input) => {
     const issuedAt = new Date().toISOString();
     const token = generateVerificationToken();
     const verifyUrl = buildVerifyUrl(documentId, token);
+    const { signer, organization } = await resolveSignerContext(ownerId || "officer");
 
-    await saveDocument({
+    const submitted = await saveDocument({
         document_id: documentId,
         owner_id: ownerId || "demo-citizen",
         original_name: originalName || "document.pdf",
@@ -88,21 +196,55 @@ export const processDocument = async (input) => {
         fileHash: signedHash,
         issuedAt,
         keyId: activeKey.key_id,
-        version: 1
+        documentType: "CT01",
+        algorithm: activeKey.algorithm,
+        signer,
+        organization,
+        purpose: "Issue public administrative document",
     });
 
     const signature = await signPayload(payload);
+    const signatureRecord = await createFalconSignatureRecord({
+        document: { ...submitted, original_file_hash: fileHash },
+        signedFileHash: signedHash,
+        issuedAt,
+        activeKey,
+        signatureInfo: signature,
+        payload,
+        signer,
+        organization,
+        ipAddress
+    });
+    const evidencePath = writeSignatureEvidenceFile(documentFolder, {
+        document_id: documentId,
+        verify_url: verifyUrl,
+        signature_type: "organization_falcon",
+        signature: signature.signature,
+        payload,
+        payload_hash: hashText(payload),
+        key_id: signature.key_id,
+        algorithm: signature.algorithm,
+        signer,
+        organization,
+        signed_file_hash: signedHash,
+        original_file_hash: fileHash,
+        signed_at: issuedAt,
+        signature_record_id: signatureRecord.signature_id || null
+    });
 
     const saved = await updateDocument(documentId, {
         status: "issued",
         file_hash: signedHash,
+        signed_file_hash: signedHash,
         signed_pdf_path: signedPath,
         signature: signature.signature,
         signature_payload: payload,
+        signature_evidence_path: evidencePath,
         public_key_id: activeKey.key_id,
+        public_key: activeKey.public_key,
         token_hash: hashText(token),
         verify_url: verifyUrl,
-        qr_payload: { document_id: documentId, verify_url: verifyUrl, token, status: "issued", owner_name: "" },
+        qr_payload: { document_id: documentId, verify_url: verifyUrl, status: "issued", owner_name: "" },
         signed_at: issuedAt
     });
 
@@ -149,6 +291,87 @@ export const verifyDocument = async ({ documentId, token, filePath = null, userI
             status: document.status
         };
     }
+
+    const signatureRecord = normalizeSignatureRecord(
+        await getLatestSignatureByDocumentId(documentId, "organization_falcon")
+    ) || normalizeSignatureRecord({
+        document_id: document.document_id,
+        signature: document.signature,
+        signature_payload: document.signature_payload,
+        file_hash: document.file_hash,
+        original_file_hash: document.original_file_hash,
+        algorithm: document.algorithm,
+        public_key_id: document.public_key_id,
+        public_key: document.public_key,
+        signed_at: document.signed_at,
+        signature_status: document.signature ? "active" : "missing",
+    });
+
+    if (!signatureRecord?.signature_value || !signatureRecord?.signature_payload_json) {
+        await writeAuditLog({ action: "verify", documentId, userId, ipAddress, result: "fail" });
+        return {
+            valid: false,
+            reason: "SIGNATURE_NOT_FOUND",
+            status: document.status
+        };
+    }
+
+    let currentHashV2;
+    if (filePath) {
+        currentHashV2 = await hashFile(filePath);
+    } else if (document.signed_pdf_path && fs.existsSync(document.signed_pdf_path)) {
+        currentHashV2 = await hashFile(document.signed_pdf_path);
+    } else {
+        currentHashV2 = signatureRecord.signed_file_hash || document.file_hash;
+    }
+
+    const expectedHash = signatureRecord.signed_file_hash || document.file_hash;
+    const hashMatchedV2 = currentHashV2 === expectedHash;
+    let publicKey = signatureRecord.public_key || document.public_key;
+    let publicKeyStatus = "unknown";
+    try {
+        const key = await getPublicKeyById(signatureRecord.key_id);
+        publicKey = key.public_key;
+        publicKeyStatus = key.status;
+    } catch {
+        publicKeyStatus = publicKey ? "snapshot" : "missing";
+    }
+
+    const signatureValidV2 = await verifyPayloadSignature({
+        payload: signatureRecord.signature_payload_json,
+        signature: signatureRecord.signature_value,
+        publicKey
+    });
+    const validV2 = hashMatchedV2 && signatureValidV2;
+
+    await writeAuditLog({
+        action: "verify",
+        documentId,
+        userId,
+        ipAddress,
+        result: validV2 ? "success" : "fail"
+    });
+
+    return {
+        valid: validV2,
+        reason: validV2 ? "VALID_DOCUMENT" : "TAMPERED_OR_INVALID_SIGNATURE",
+        document_id: document.document_id,
+        file_hash: expectedHash,
+        current_hash: currentHashV2,
+        hash_matched: hashMatchedV2,
+        signature_valid: signatureValidV2,
+        algorithm: signatureRecord.algorithm,
+        signature_provider: document.signature_provider || "crypto-zone",
+        public_key_id: signatureRecord.key_id,
+        key_id: signatureRecord.key_id,
+        public_key_status: publicKeyStatus,
+        signer: signatureRecord.signer,
+        organization: signatureRecord.organization,
+        status: document.status,
+        signed_at: signatureRecord.signed_at || document.signed_at,
+        signature_type: signatureRecord.signature_type,
+        signature_status: signatureRecord.signature_status
+    };
 
     // Khi không có file upload → hash file thật trên đĩa để phát hiện giả mạo
     // Không được dùng document.file_hash để so sánh với chính nó (luôn khớp)
@@ -223,6 +446,13 @@ export const getDocument = async (documentId) => {
         if (owner) owner_name = owner.full_name;
     } catch (_) { /* bỏ qua nếu không tìm thấy */ }
 
+    let signature_info = null;
+    try {
+        signature_info = normalizeSignatureRecord(
+            await getLatestSignatureByDocumentId(documentId, "organization_falcon")
+        );
+    } catch (_) { /* ignore signature lookup failures for listing */ }
+
     return {
         document_id: document.document_id,
         owner_id: document.owner_id,
@@ -236,6 +466,11 @@ export const getDocument = async (documentId) => {
         algorithm: document.algorithm,
         signature_provider: document.signature_provider,
         public_key_id: document.public_key_id,
+        signer: signature_info?.signer || null,
+        organization: signature_info?.organization || null,
+        signature_type: signature_info?.signature_type || null,
+        signature_status: signature_info?.signature_status || null,
+        signature_evidence_path: document.signature_evidence_path || null,
         verify_url: document.verify_url,
         signed_pdf_url: document.signed_pdf_path ? `/api/app/documents/${document.document_id}/signed-pdf` : null,
         status: document.status,
@@ -353,6 +588,7 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
     const activeKey = await getActiveKey();
     const token = generateVerificationToken();
     const verifyUrl = buildVerifyUrl(documentId, token);
+    const { signer, organization } = await resolveSignerContext(officerId);
 
     // Look up owner name for QR payload
     let ownerName = "";
@@ -376,7 +612,9 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
             key_id: activeKey.key_id,
             issued_at: issuedAt,
             status: "issued",
-            owner_name: ownerName
+            owner_name: ownerName,
+            signer_name: signer.full_name,
+            organization_name: organization.name
         }
     });
 
@@ -389,9 +627,41 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
         fileHash,
         issuedAt,
         keyId: activeKey.key_id,
-        version: 1
+        documentType: "CT01",
+        algorithm: activeKey.algorithm,
+        signer,
+        organization,
+        purpose: "Issue public administrative document",
     });
     const signatureInfo = await signPayload(payload);
+    const signatureRecord = await createFalconSignatureRecord({
+        document,
+        signedFileHash: fileHash,
+        issuedAt,
+        activeKey,
+        signatureInfo,
+        payload,
+        signer,
+        organization,
+        ipAddress
+    });
+    const evidencePath = writeSignatureEvidenceFile(documentFolder, {
+        document_id: documentId,
+        verify_url: verifyUrl,
+        signature_type: "organization_falcon",
+        signature: signatureInfo.signature,
+        payload,
+        payload_hash: hashText(payload),
+        key_id: signatureInfo.key_id,
+        algorithm: signatureInfo.algorithm,
+        signer,
+        organization,
+        signed_file_hash: fileHash,
+        original_file_hash: document.original_file_hash || null,
+        signed_at: issuedAt,
+        signature_record_id: signatureRecord.signature_id || null,
+        note: "QR supports public verification; Falcon evidence is verified by backend."
+    });
 
     // 5. Update document record
     const updated = await updateDocument(documentId, {
@@ -399,8 +669,10 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
         signed_at: issuedAt,
         signed_pdf_path: signedFilePath,
         file_hash: fileHash,
+        signed_file_hash: fileHash,
         signature: signatureInfo.signature,
         signature_payload: payload,
+        signature_evidence_path: evidencePath,
         algorithm: signatureInfo.algorithm,
         signature_provider: signatureInfo.provider,
         public_key_id: signatureInfo.key_id,
@@ -410,9 +682,10 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
         qr_payload: {
             document_id: documentId,
             verify_url: verifyUrl,
-            token,
             status: "issued",
-            owner_name: ownerName
+            owner_name: ownerName,
+            signer_name: signer.full_name,
+            organization_name: organization.name
         }
     });
 
@@ -439,6 +712,8 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
         algorithm: updated.algorithm,
         signature_provider: updated.signature_provider,
         public_key_id: updated.public_key_id,
+        signer,
+        organization,
         verify_url: updated.verify_url,
         qr_payload: updated.qr_payload,
         file_path: updated.signed_pdf_path,

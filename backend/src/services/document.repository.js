@@ -105,45 +105,43 @@ const mysqlRepo = {
     },
 
     async updateDocument(documentId, updated) {
-        const query = `
-            UPDATE documents
-            SET status = ?,
-                signature = ?,
-                public_key_id = ?,
-                public_key = ?,
-                signed_pdf_path = ?,
-                file_hash = ?,
-                token_hash = ?,
-                verify_url = ?,
-                signature_payload = ?,
-                algorithm = ?,
-                signature_provider = ?,
-                qr_payload = ?,
-                signed_at = ?,
-                rejection_reason = ?,
-                rejected_at = ?
-            WHERE document_id = ?
-        `;
-        await db.query(query, [
-            updated.status || null,
-            updated.signature || null,
-            updated.public_key_id || null,
-            updated.public_key || null,
-            updated.signed_pdf_path || null,
-            updated.file_hash || null,
-            updated.token_hash || null,
-            updated.verify_url || null,
-            updated.signature_payload
-                ? (typeof updated.signature_payload === "string" ? updated.signature_payload : JSON.stringify(updated.signature_payload))
-                : null,
-            updated.algorithm || null,
-            updated.signature_provider || null,
-            updated.qr_payload ? JSON.stringify(updated.qr_payload) : null,
-            toMySQL(updated.signed_at),
-            updated.rejection_reason || null,
-            toMySQL(updated.rejected_at),
-            documentId
-        ]);
+        const fieldMap = {
+            status: value => value,
+            signature: value => value,
+            public_key_id: value => value,
+            public_key: value => value,
+            signed_pdf_path: value => value,
+            file_hash: value => value,
+            signed_file_hash: value => value,
+            token_hash: value => value,
+            verify_url: value => value,
+            signature_payload: value =>
+                typeof value === "string" ? value : JSON.stringify(value),
+            algorithm: value => value,
+            signature_provider: value => value,
+            qr_payload: value => JSON.stringify(value),
+            signed_at: value => toMySQL(value),
+            rejection_reason: value => value,
+            rejected_at: value => toMySQL(value),
+            signature_evidence_path: value => value
+        };
+
+        const assignments = [];
+        const values = [];
+        for (const [field, transform] of Object.entries(fieldMap)) {
+            if (Object.prototype.hasOwnProperty.call(updated, field)) {
+                assignments.push(`${field} = ?`);
+                values.push(transform(updated[field]));
+            }
+        }
+
+        if (assignments.length > 0) {
+            values.push(documentId);
+            await db.query(
+                `UPDATE documents SET ${assignments.join(", ")} WHERE document_id = ?`,
+                values
+            );
+        }
         // Trả về toàn bộ document sau khi cập nhật
         const [rows] = await db.query("SELECT * FROM documents WHERE document_id = ?", [documentId]);
         if (rows.length === 0) return null;

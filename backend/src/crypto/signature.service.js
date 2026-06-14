@@ -96,12 +96,29 @@ export const getActiveKey = async () => {
  * @param {*}      [input.version]   Ignored. Always emitted as "1.0".
  * @returns {string} canonical JSON string
  */
-export const buildSignaturePayload = ({ documentId, fileHash, issuedAt, keyId } = {}) => {
+export const buildSignaturePayload = ({
+    documentId,
+    fileHash,
+    issuedAt,
+    keyId,
+    documentType,
+    hashAlgorithm,
+    algorithm,
+    purpose,
+    signer,
+    organization,
+} = {}) => {
     return falconService.signaturePayload({
         documentId,
         fileHash,
         issuedAt,
         keyId,
+        documentType,
+        hashAlgorithm,
+        algorithm,
+        purpose,
+        signer,
+        organization,
         version: "1.0",
     });
 };

@@ -47,8 +47,10 @@ function validateSecret(name, value) {
         if (!IS_DEV) {
             throw new Error(`[env] ${name} must be set in production (NODE_ENV=production)`);
         }
-        // In dev, generate a random fallback so the app still boots
-        return `dev-only-${name.toLowerCase()}-${Date.now()}`;
+        // In dev/test, use a stable fallback so the local encrypted keystore
+        // remains readable across process restarts. Production still requires
+        // explicit non-default secrets.
+        return `dev-only-${name.toLowerCase()}-local-secret`;
     }
     if (!IS_DEV && DEFAULT_SECRETS.includes(value.toLowerCase())) {
         throw new Error(

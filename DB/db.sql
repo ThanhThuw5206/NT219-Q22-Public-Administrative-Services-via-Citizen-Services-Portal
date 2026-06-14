@@ -44,6 +44,28 @@ CREATE TABLE user_roles (
 ) ENGINE=InnoDB;
 
 -- =========================================================================
+-- 4B. BẢNG ORGANIZATIONS (Cơ quan phát hành)
+-- =========================================================================
+CREATE TABLE organizations (
+    organization_id VARCHAR(100) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(100) UNIQUE NULL,
+    status ENUM('active', 'inactive') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE user_organizations (
+    user_id INT NOT NULL,
+    organization_id VARCHAR(100) NOT NULL,
+    position VARCHAR(255) NULL,
+    status ENUM('active', 'inactive') DEFAULT 'active',
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, organization_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (organization_id) REFERENCES organizations(organization_id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- =========================================================================
 -- 5. BẢNG KEYS_PUB (Khóa công khai)
 -- =========================================================================
 CREATE TABLE keys_pub (
@@ -55,6 +77,24 @@ CREATE TABLE keys_pub (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expired_at TIMESTAMP NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE signing_keys (
+    key_id VARCHAR(150) PRIMARY KEY,
+    algorithm VARCHAR(50) NOT NULL DEFAULT 'FALCON-512',
+    provider VARCHAR(100) NOT NULL DEFAULT 'file',
+    public_key TEXT NOT NULL,
+    private_key_ref TEXT NULL,
+    owner_type ENUM('user', 'organization') NOT NULL DEFAULT 'organization',
+    owner_id VARCHAR(100) NOT NULL,
+    owner_name VARCHAR(255) NULL,
+    status ENUM('active', 'retired', 'revoked', 'expired') DEFAULT 'active',
+    valid_from TIMESTAMP NULL,
+    valid_to TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    rotated_at TIMESTAMP NULL,
+    revoked_at TIMESTAMP NULL,
+    revocation_reason TEXT NULL
 ) ENGINE=InnoDB;
 
 -- =========================================================================
@@ -83,6 +123,7 @@ CREATE TABLE documents (
     document_id VARCHAR(50) PRIMARY KEY,
     owner_id INT NOT NULL,
     file_hash CHAR(64) NULL,
+    signed_file_hash CHAR(64) NULL,
     signature TEXT NULL,
     public_key_id VARCHAR(100) NULL,
     public_key TEXT NULL,
@@ -101,6 +142,7 @@ CREATE TABLE documents (
     signed_at TIMESTAMP NULL,
     original_pdf_path TEXT NULL,
     signed_pdf_path TEXT NULL,
+    signature_evidence_path TEXT NULL,
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (preview_id) REFERENCES document_previews(preview_id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
@@ -118,6 +160,18 @@ CREATE TABLE document_signatures (
     signature TEXT NOT NULL,
     algorithm VARCHAR(50) DEFAULT 'FALCON',
     public_key_id VARCHAR(100) NULL,
+    signature_type ENUM('officer_personal_falcon', 'organization_falcon', 'pdf_native_pades') DEFAULT 'organization_falcon',
+    signature_payload_json JSON NULL,
+    payload_hash CHAR(64) NULL,
+    original_file_hash CHAR(64) NULL,
+    signer_user_id VARCHAR(100) NULL,
+    signer_full_name VARCHAR(255) NULL,
+    signer_role VARCHAR(100) NULL,
+    organization_id VARCHAR(100) NULL,
+    organization_name VARCHAR(255) NULL,
+    signing_ip VARCHAR(50) NULL,
+    signing_reason TEXT NULL,
+    signature_status ENUM('active', 'revoked') DEFAULT 'active',
     signed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;

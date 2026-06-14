@@ -75,7 +75,9 @@ const META_LABELS = [
     "Key ID",
     "Issued at",
     "Status",
-    "Owner"
+    "Owner",
+    "Signer",
+    "Organization"
 ];
 
 /**
@@ -212,7 +214,9 @@ const drawMetadataBox = (page, font, metadata) => {
         `${META_LABELS[3]}: ${sanitizeForWinAnsi(metadata.key_id)}`,
         `${META_LABELS[4]}: ${sanitizeForWinAnsi(metadata.issued_at)}`,
         `${META_LABELS[5]}: ${sanitizeForWinAnsi(metadata.status)}`,
-        `${META_LABELS[6]}: ${sanitizeForWinAnsi(metadata.owner_name)}`
+        `${META_LABELS[6]}: ${sanitizeForWinAnsi(metadata.owner_name)}`,
+        `${META_LABELS[7]}: ${sanitizeForWinAnsi(metadata.signer_name)}`,
+        `${META_LABELS[8]}: ${sanitizeForWinAnsi(metadata.organization_name)}`
     ];
 
     const boxWidth = META_MIN_WIDTH;

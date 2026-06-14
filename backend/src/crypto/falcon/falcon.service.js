@@ -38,6 +38,37 @@ const PAYLOAD_VERSION_DEFAULT = "1.0";
 // hash.service.js so a hash that came from there will always pass here.
 const SHA256_HEX_RE = /^[0-9a-f]{64}$/;
 
+function snakeCaseKey(key) {
+    return String(key)
+        .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+        .replace(/[\s-]+/g, "_")
+        .toLowerCase();
+}
+
+function normalizeForCanonicalJson(value) {
+    if (Array.isArray(value)) {
+        return value.map(normalizeForCanonicalJson);
+    }
+    if (value && typeof value === "object") {
+        const out = {};
+        for (const key of Object.keys(value).sort()) {
+            const normalized = normalizeForCanonicalJson(value[key]);
+            if (normalized !== undefined) {
+                out[snakeCaseKey(key)] = normalized;
+            }
+        }
+        return out;
+    }
+    if (value === undefined) {
+        return undefined;
+    }
+    return value;
+}
+
+function canonicalStringify(value) {
+    return JSON.stringify(normalizeForCanonicalJson(value));
+}
+
 /**
  * Stable error class used by every export in this service.
  *
@@ -84,9 +115,8 @@ function assertNonEmptyString(value, field) {
  * to `verify`).
  *
  * The output is deterministic:
- *   - keys are snake_case (`document_id`, `file_hash`, `issued_at`,
- *     `key_id`, `version`)
- *   - keys are emitted in alphabetical order
+ *   - keys are snake_case
+ *   - keys are emitted in alphabetical order, recursively
  *   - there is no whitespace (compact JSON)
  *   - `version` is always a STRING. Defaults to "1.0".
  *
@@ -99,6 +129,12 @@ function assertNonEmptyString(value, field) {
  * @param {string} input.issuedAt         ISO 8601 timestamp.
  * @param {string} input.keyId
  * @param {string} [input.version]        Defaults to "1.0".
+ * @param {string} [input.documentType]
+ * @param {string} [input.hashAlgorithm]
+ * @param {string} [input.algorithm]
+ * @param {string} [input.purpose]
+ * @param {Object} [input.signer]
+ * @param {Object} [input.organization]
  * @returns {string} canonical JSON string
  * @throws {FalconServiceError} 'INVALID_PAYLOAD'
  */
@@ -110,7 +146,19 @@ export function signaturePayload(input) {
         );
     }
 
-    const { documentId, fileHash, issuedAt, keyId, version } = input;
+    const {
+        documentId,
+        fileHash,
+        issuedAt,
+        keyId,
+        version,
+        documentType,
+        hashAlgorithm,
+        algorithm,
+        purpose,
+        signer,
+        organization,
+    } = input;
 
     assertNonEmptyString(documentId, "documentId");
     assertNonEmptyString(fileHash, "fileHash");
@@ -142,19 +190,21 @@ export function signaturePayload(input) {
         );
     }
 
-    // Build with explicit alphabetical order. We rely on insertion order =
-    // serialization order, which is guaranteed for string keys in V8/Node.
-    // We do NOT use `Object.keys(...).sort()` because that would also sort
-    // any accidental extra fields, hiding bugs.
     const canonical = {
+        algorithm: algorithm || ALGORITHM,
         document_id: documentId,
+        document_type: documentType || "CT01",
         file_hash: fileHash,
+        hash_algorithm: hashAlgorithm || "SHA-256",
         issued_at: issuedAt,
         key_id: keyId,
+        organization: organization || null,
+        purpose: purpose || "Issue public administrative document",
+        signer: signer || null,
         version: versionValue,
     };
 
-    return JSON.stringify(canonical);
+    return canonicalStringify(canonical);
 }
 
 /**
