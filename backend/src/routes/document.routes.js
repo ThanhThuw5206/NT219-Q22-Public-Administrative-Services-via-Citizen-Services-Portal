@@ -9,12 +9,10 @@ import {
     listPendingDocuments,
     listIssuedDocuments,
     listRejectedDocuments,
-    uploadDocument,
     verifyDocumentByQr,
     verifyDocumentByUpload,
     previewDocument,
     downloadPreviewDocument,
-    issueDocument,
     submitDocumentHandler,
     signDocumentHandler,
     createSigningChallengeHandler,
@@ -44,7 +42,6 @@ router.get("/:documentId/download", authenticate, downloadDocumentFile);
 router.get("/pending", authenticate, requireRole("officer", "admin"), listPendingDocuments);
 router.get("/issued", authenticate, requireRole("officer", "admin"), listIssuedDocuments);
 router.get("/rejected", authenticate, requireRole("officer", "admin"), listRejectedDocuments);
-router.post("/upload", authenticate, requireRole("officer", "admin"), uploadDocument);
 router.post("/register-device-key", authenticate, requireRole("officer", "admin"), registerDeviceKeyHandler);
 router.get("/check-device-key", authenticate, requireRole("officer", "admin"), checkDeviceKeyHandler);
 router.post("/:documentId/sign-challenge", authenticate, requireRole("officer", "admin"), createSigningChallengeHandler);
@@ -53,8 +50,5 @@ router.post("/:documentId/reject", authenticate, requireRole("officer", "admin")
 
 // Authenticated detail route must stay after fixed routes such as /pending.
 router.get("/:documentId", authenticate, getDocumentDetail);
-
-// Legacy
-router.post("/issue", authenticate, requireRole("officer", "admin"), issueDocument);
 
 export default router;

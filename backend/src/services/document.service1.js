@@ -3,9 +3,10 @@
  * Xử lý toàn bộ vòng đời tài liệu: nộp hồ sơ → ký số → xác minh
  */
 import crypto from "crypto";
+import { promises as fsPromises } from "fs";
 import fs from "fs";
 import { hashFile, hashText } from "../crypto/hash.service.js";
-import { saveDocument, updateDocument, findDocumentById, listDocuments } from "./document.repository.js";
+import { saveDocument, updateDocument, findDocumentById, listDocuments, listDocumentsByStatus, listDocumentsByOwner } from "./document.repository.js";
 import { createSignature, getLatestSignatureByDocumentId, listSignaturesByDocumentId } from "./signature.repository.js";
 import { createChallenge, findChallengeById, markChallengeUsed } from "./signing-challenge.repository.js";
 import { buildSignaturePayload, getActiveKey, signPayload, signPayloadWithKey, verifyPayloadSignature } from "../crypto/signature.service.js";
@@ -171,9 +172,9 @@ const createFalconSignatureRecord = async ({
     });
 };
 
-const writeSignatureEvidenceFile = (documentFolder, evidence) => {
+const writeSignatureEvidenceFile = async (documentFolder, evidence) => {
     const evidencePath = path.join(documentFolder, "signature-evidence.json");
-    fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2));
+    await fsPromises.writeFile(evidencePath, JSON.stringify(evidence, null, 2));
     return evidencePath;
 };
 
@@ -559,8 +560,15 @@ export const getDocument = async (documentId) => {
 
 /** Lấy danh sách tài liệu thuộc về một công dân cụ thể */
 export const getDocumentsByOwner = async (ownerId) => {
-    const allDocs = await listDocuments();
-    const filteredDocs = allDocs.filter((doc) => doc.owner_id === ownerId);
+    let filteredDocs;
+    if (listDocumentsByOwner) {
+        // MySQL: query trực tiếp theo owner_id (không load all)
+        filteredDocs = await listDocumentsByOwner(ownerId);
+    } else {
+        // JSON: filter in-memory
+        const allDocs = await listDocuments();
+        filteredDocs = allDocs.filter((doc) => doc.owner_id === ownerId);
+    }
     const docs = await Promise.all(filteredDocs.map((doc) => getDocument(doc.document_id)));
     docs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return docs;
@@ -623,7 +631,7 @@ export const submitDocument = async ({ documentId, filePath, originalName, owner
 
     const saved = await saveDocument(record);
 
-    fs.writeFileSync(
+    await fsPromises.writeFile(
         path.join(folder, "metadata.json"),
         JSON.stringify(saved, null, 2)
     );
@@ -852,8 +860,8 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
         } catch (error) {
             if (error?.code === "PUBLIC_ONLY_KEY") {
                 throw new Error(
-                    "Officer has a public-only key (device mode). " +
-                    "Please provide a device signature proof, or switch to HSM mode."
+                    "Officer key is public-only (no private key on server). " +
+                    "Either provide a device signature proof, or ensure ALLOW_SERVER_SIDE_PERSONAL_KEYS is enabled."
                 );
             }
             throw error;
@@ -1000,7 +1008,7 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
     });
 
     // 6. Update metadata.json
-    fs.writeFileSync(
+    await fsPromises.writeFile(
         path.join(documentFolder, "metadata.json"),
         JSON.stringify(updated, null, 2)
     );
@@ -1045,8 +1053,15 @@ export const getDocuments = async () => {
 
 /** Lấy danh sách tài liệu theo trạng thái (submitted, issued, ...) */
 export const getDocumentsByStatus = async (status) => {
-    const allDocs = await listDocuments();
-    const filteredDocs = allDocs.filter((doc) => doc.status === status);
+    let filteredDocs;
+    if (listDocumentsByStatus) {
+        // MySQL: query trực tiếp theo status (không load all)
+        filteredDocs = await listDocumentsByStatus(status);
+    } else {
+        // JSON: filter in-memory
+        const allDocs = await listDocuments();
+        filteredDocs = allDocs.filter((doc) => doc.status === status);
+    }
 
     const docs = await Promise.all(
         filteredDocs.map((doc) => getDocument(doc.document_id))

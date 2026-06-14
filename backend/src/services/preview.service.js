@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import fs from "fs";
+import { promises as fs } from "fs";
 import path from "path";
 import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
@@ -38,11 +38,11 @@ export const createPreviewDocument = async (data) => {
     );
 
     // LOAD TEMPLATE
-    const templateBytes = fs.readFileSync(TEMPLATE_PATH);
+    const templateBytes = await fs.readFile(TEMPLATE_PATH);
     const pdfDoc = await PDFDocument.load(templateBytes);
-    
+
     pdfDoc.registerFontkit(fontkit);
-    const fontBytes = fs.readFileSync("src/fonts/Roboto-Regular.ttf");
+    const fontBytes = await fs.readFile("src/fonts/Roboto-Regular.ttf");
     const font = await pdfDoc.embedFont(fontBytes);
 
     const pages = pdfDoc.getPages();
@@ -147,7 +147,7 @@ export const createPreviewDocument = async (data) => {
     //------------------------------------------
     const pdfBytes = await pdfDoc.save();
 
-    fs.writeFileSync(
+    await fs.writeFile(
         previewPath,
         pdfBytes
     );

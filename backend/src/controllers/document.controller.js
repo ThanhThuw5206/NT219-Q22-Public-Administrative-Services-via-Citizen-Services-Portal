@@ -31,8 +31,8 @@ import {
 import { saveMembersForDocument } from "../repositories/household_members.repository.js";
 import { validateFilePath } from "../utils/path-validator.util.js";
 import { STORAGE_ROOT } from "../utils/storage.util.js";
-import { IS_DEV } from "../config/env.config.js";
-import { registerExternalPublicKeyForOwner } from "../crypto/key-manager.service.js";
+import { IS_DEV, SIGNING_MODE } from "../config/env.config.js";
+import { registerExternalPublicKeyForOwner, getActivePublicKeyForOwner } from "../crypto/key-manager.service.js";
 
 /**
  * Safe error responses for document endpoints.
@@ -631,9 +631,6 @@ export const registerDeviceKeyHandler = async (req, res) => {
 /** Kiểm tra officer đã đăng ký device key chưa + signing mode hiện tại */
 export const checkDeviceKeyHandler = async (req, res) => {
     try {
-        const { SIGNING_MODE } = await import("../config/env.config.js");
-        const { getActivePublicKeyForOwner } = await import("../crypto/key-manager.service.js");
-
         // HSM mode: server quản lý key, không cần officer đăng ký device key
         if (SIGNING_MODE === "hsm") {
             return res.json({

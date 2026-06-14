@@ -2,6 +2,7 @@
  * network-zone.middleware.js - Gắn thông tin vùng mạng và bảo vệ zone nội bộ.
  * 4 vùng: PUBLIC, APPLICATION, CRYPTO, DATA
  */
+import crypto from "crypto";
 import { INTERNAL_CRYPTO_SECRET } from "../config/env.config.js";
 import * as auditService from "../services/audit.service.js";
 
@@ -14,12 +15,18 @@ export const attachNetworkZone = (zone) => {
     };
 };
 
-// Tìm hàm requireCryptoZoneAccess và sửa lại như sau:
-/** Bảo vệ zone mã hóa: yêu cầu header x-internal-crypto-secret hợp lệ */
-export const requireCryptoZoneAccess = async (req, res, next) => { // 1. THÊM TỪ KHÓA async TẠI ĐÂY
-    const providedSecret = req.header("x-internal-crypto-secret");
+/** Bảo vệ zone mã hóa: yêu cầu header x-internal-crypto-secret hợp lệ (timing-safe) */
+export const requireCryptoZoneAccess = async (req, res, next) => {
+    const providedSecret = req.header("x-internal-crypto-secret") || "";
 
-    if (providedSecret !== INTERNAL_CRYPTO_SECRET) {
+    // Timing-safe comparison để chống timing attack
+    const isValid = providedSecret.length === INTERNAL_CRYPTO_SECRET.length &&
+        crypto.timingSafeEqual(
+            Buffer.from(providedSecret),
+            Buffer.from(INTERNAL_CRYPTO_SECRET)
+        );
+
+    if (!isValid) {
         try {
             if (typeof auditService.logKeyAccess === "function") {
                 await auditService.logKeyAccess({ // 2. THÊM TỪ KHÓA await TẠI ĐÂY

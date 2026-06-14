@@ -50,7 +50,7 @@
  *   - PdfEmbedderError -> typed error class
  */
 
-import fs from "fs";
+import { promises as fs } from "fs";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 // QR placement (Requirement 3.2)
@@ -95,17 +95,9 @@ export class PdfEmbedderError extends Error {
     }
 }
 
-const removePartialFile = (filePath) => {
-    if (!filePath) {
-        return;
-    }
-    try {
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-        }
-    } catch (_cleanupErr) {
-        // Swallow cleanup errors — the original failure is the one that matters.
-    }
+const removePartialFile = async (filePath) => {
+    if (!filePath) return;
+    try { await fs.unlink(filePath); } catch { /* swallow cleanup errors */ }
 };
 
 const loadPdfDocument = async (pdfBytes) => {
@@ -330,7 +322,7 @@ export const embedQRAndMetadata = async ({
 
     let qrImageBytes;
     try {
-        qrImageBytes = fs.readFileSync(qrImagePath);
+        qrImageBytes = await fs.readFile(qrImagePath);
     } catch (err) {
         throw new PdfEmbedderError(
             "STORAGE_OPERATION_FAILED",
@@ -400,7 +392,7 @@ const embedQrOnly = async ({ pdfBytes, qrImagePath }) => {
 
     let qrImageBytes;
     try {
-        qrImageBytes = fs.readFileSync(qrImagePath);
+        qrImageBytes = await fs.readFile(qrImagePath);
     } catch (err) {
         throw new PdfEmbedderError(
             "STORAGE_OPERATION_FAILED",
@@ -497,7 +489,7 @@ export const embedQrIntoPdf = async ({
 
     let sourceBytes;
     try {
-        sourceBytes = fs.readFileSync(sourceFilePath);
+        sourceBytes = await fs.readFile(sourceFilePath);
     } catch (err) {
         throw new PdfEmbedderError(
             "STORAGE_OPERATION_FAILED",
@@ -518,9 +510,9 @@ export const embedQrIntoPdf = async ({
         });
 
     try {
-        fs.writeFileSync(outputFilePath, outBuffer);
+        await fs.writeFile(outputFilePath, outBuffer);
     } catch (err) {
-        removePartialFile(outputFilePath);
+        await removePartialFile(outputFilePath);
         throw new PdfEmbedderError(
             "STORAGE_OPERATION_FAILED",
             `Failed to write signed PDF to ${outputFilePath}`,

@@ -1,4 +1,4 @@
-import fs from "fs";
+import { promises as fsPromises } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
@@ -15,12 +15,6 @@ const isMySQL = DB_STORAGE_TYPE === "mysql";
 /** Regex kiểm tra định dạng email cơ bản */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/**
- * Kiểm tra dữ liệu đầu vào khi đăng ký tài khoản.
- * - full_name: tối thiểu 2 ký tự
- * - email: phải đúng định dạng
- * - password: tối thiểu 6 ký tự
- */
 function validateRegistrationInput({ full_name, email, password }) {
     if (!full_name || typeof full_name !== "string" || full_name.trim().length < 2) {
         throw new Error("Full name must be at least 2 characters");
@@ -34,45 +28,41 @@ function validateRegistrationInput({ full_name, email, password }) {
 }
 
 // ==========================================
-// CHẾ ĐỘ FILE JSON (Cũ của nhóm)
+// CHẾ ĐỘ FILE JSON (async I/O)
 // ==========================================
 const jsonAuth = {
-    readUsers() {
-        fs.mkdirSync(dataDirectory, { recursive: true });
-        if (!fs.existsSync(dataFilePath)) return [];
-        return JSON.parse(fs.readFileSync(dataFilePath, "utf8"));
+    async readUsers() {
+        await fsPromises.mkdir(dataDirectory, { recursive: true });
+        try { return JSON.parse(await fsPromises.readFile(dataFilePath, "utf8")); } catch { return []; }
     },
-    writeUsers(users) {
-        fs.mkdirSync(dataDirectory, { recursive: true });
-        fs.writeFileSync(dataFilePath, JSON.stringify(users, null, 2));
+    async writeUsers(users) {
+        await fsPromises.mkdir(dataDirectory, { recursive: true });
+        await fsPromises.writeFile(dataFilePath, JSON.stringify(users, null, 2));
     },
-    nextId() {
-        const users = this.readUsers();
+    async nextId() {
+        const users = await this.readUsers();
         return users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
     },
     async register({ full_name, email, password }) {
         validateRegistrationInput({ full_name, email, password });
-        const users = this.readUsers();
+        const users = await this.readUsers();
         if (users.find(u => u.email === email)) {
             throw new Error("Email already registered");
         }
         const password_hash = await bcrypt.hash(password, 10);
         const newUser = {
-            id: this.nextId(),
-            full_name,
-            email,
-            password_hash,
-            roles: ["citizen"],
-            status: "active",
+            id: await this.nextId(),
+            full_name, email, password_hash,
+            roles: ["citizen"], status: "active",
             created_at: new Date().toISOString()
         };
         users.push(newUser);
-        this.writeUsers(users);
+        await this.writeUsers(users);
         const { password_hash: _, ...safe } = newUser;
         return safe;
     },
     async login({ email, password }) {
-        const users = this.readUsers();
+        const users = await this.readUsers();
         const user = users.find(u => u.email === email);
         if (!user) throw new Error("Invalid email or password");
         if (user.status === "locked") throw new Error("Account is locked");
@@ -80,50 +70,28 @@ const jsonAuth = {
         if (!isMatch) throw new Error("Invalid email or password");
         const token = jwt.sign(
             { id: user.id, email: user.email, full_name: user.full_name, roles: user.roles },
-            JWT_SECRET,
-            { expiresIn: JWT_EXPIRES_IN }
+            JWT_SECRET, { expiresIn: JWT_EXPIRES_IN }
         );
-        return {
-            token,
-            user: { id: user.id, full_name: user.full_name, email: user.email, roles: user.roles }
-        };
+        return { token, user: { id: user.id, full_name: user.full_name, email: user.email, roles: user.roles } };
     },
     async getUserById(id) {
-        const users = this.readUsers();
-        // Ép kiểu ép về số hoặc chuỗi để so sánh chính xác tùy thuộc vào dữ liệu đầu vào
+        const users = await this.readUsers();
         const user = users.find(u => u.id === Number(id) || u.id === id);
         if (!user) return null;
-        
         const { password_hash, ...safe } = user;
         return safe;
     },
     async seedDefaultUsers() {
-        if (!IS_DEV) return; // Never seed default credentials in production
-        const users = this.readUsers();
+        if (!IS_DEV) return;
+        const users = await this.readUsers();
         if (users.length > 0) return;
         const officerHash = await bcrypt.hash("officer123", 10);
         const adminHash = await bcrypt.hash("admin123", 10);
         users.push(
-            {
-                id: 1,
-                full_name: "Can bo Nguyen",
-                email: "officer@test.com",
-                password_hash: officerHash,
-                roles: ["officer"],
-                status: "active",
-                created_at: new Date().toISOString()
-            },
-            {
-                id: 2,
-                full_name: "Quan Tri Vien",
-                email: "admin@test.com",
-                password_hash: adminHash,
-                roles: ["admin"],
-                status: "active",
-                created_at: new Date().toISOString()
-            }
+            { id: 1, full_name: "Can bo Nguyen", email: "officer@test.com", password_hash: officerHash, roles: ["officer"], status: "active", created_at: new Date().toISOString() },
+            { id: 2, full_name: "Quan Tri Vien", email: "admin@test.com", password_hash: adminHash, roles: ["admin"], status: "active", created_at: new Date().toISOString() }
         );
-        this.writeUsers(users);
+        await this.writeUsers(users);
     }
 };
 

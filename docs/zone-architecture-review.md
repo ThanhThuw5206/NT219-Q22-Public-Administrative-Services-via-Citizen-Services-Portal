@@ -1,7 +1,7 @@
 # Review: Kiến trúc Network Zones & luồng hoạt động
 
 > Cập nhật: 2026-06-15
-> Phạm vi: Backend zone architecture, routing, middleware chain, crypto flow
+> Phạm vi: Backend zone architecture, routing, middleware chain, signing modes, crypto flow
 
 ---
 
@@ -32,9 +32,9 @@ Hệ thống được chia thành 4 vùng mạng (network zones), mỗi zone có
 | Zone | Path prefix | Bảo vệ | Rate limit | Mục đích |
 |---|---|---|---|---|
 | **Public** | `/api/public` | Không auth | 30 req/15min | Xác minh tài liệu qua QR/upload, hiển thị public key |
-| **Application** | `/api/app/documents` | JWT + RBAC | 100 req/15min (global) | Nghiệp vụ hồ sơ: nộp, ký, từ chối, tải file |
-| **Crypto** | `/api/internal/crypto` | `x-internal-crypto-secret` header | 100 req/15min (global) | Ký Falcon-512, xác minh chữ ký, quản lý khóa |
-| **Data** | (file system only) | Không expose HTTP | N/A | Lưu trữ file PDF, JSON/MySQL, audit logs |
+| **Application** | `/api/app/documents` | JWT + RBAC | 100 req/15min (global) | Nghiệp vụ hồ sơ: nộp, ký, từ chối, tải file, đăng ký device key |
+| **Crypto** | `/api/internal/crypto` | `x-internal-crypto-secret` header | 100 req/15min (global) | Ký Falcon-512, xác minh chữ ký, quản lý khóa (internal API) |
+| **Data** | (file system only) | Không expose HTTP | N/A | Lưu trữ file PDF, JSON/MySQL, audit logs, keystore |
 
 ---
 
@@ -69,14 +69,13 @@ User quét QR → Browser mở verify.html
         4. Hash file PDF trên đĩa → so sánh với hash lúc ký
         5. Verify Falcon-512 signature với public key
         6. Verify tất cả signature records (officer + organization)
-        7. Trả kết quả: valid, hash_matched, signature_valid, ...
+        7. Trả kết quả:
+           - valid: boolean
+           - signer: { user_id, full_name, role }   ← ai là người ký
+           - organization: { organization_id, name }
+           - hash_matched, signature_valid
+           - officer_signature_valid, organization_signature_valid
 ```
-
-**Đặc điểm:**
-- Không yêu cầu đăng nhập (anonymous access)
-- Rate limit nghiêm ngặt (30 req/15min) chống abuse
-- `verifyDocument()` NEVER throws — mọi lỗi trả `{ valid: false, reason: "..." }`
-- Audit log mọi lượt verify (success hoặc fail)
 
 ---
 
@@ -108,6 +107,8 @@ attachNetworkZone(APPLICATION) → documentRoutes
 | `GET` | `/pending` | `listPendingDocuments` | Hồ sơ chờ duyệt |
 | `GET` | `/issued` | `listIssuedDocuments` | Hồ sơ đã ký |
 | `GET` | `/rejected` | `listRejectedDocuments` | Hồ sơ đã từ chối |
+| `POST` | `/register-device-key` | `registerDeviceKeyHandler` | Đăng ký Falcon-512 device key (device mode) |
+| `GET` | `/check-device-key` | `checkDeviceKeyHandler` | Kiểm tra device key + signing mode |
 | `POST` | `/:documentId/sign-challenge` | `createSigningChallengeHandler` | Tạo thách thức ký (nonce + TTL) |
 | `POST` | `/:documentId/sign` | `signDocumentHandler` | Ký số Falcon-512 và phát hành |
 | `POST` | `/:documentId/reject` | `rejectDocumentHandler` | Từ chối hồ sơ |
@@ -121,65 +122,6 @@ attachNetworkZone(APPLICATION) → documentRoutes
 | `GET` | `/:documentId/signed-pdf` | `downloadSignedDocument` | Tải PDF đã ký (JWT HOẶC verification token) |
 | `GET` | `/verify/:documentId` | `verifyDocumentByQr` | Verify qua QR (duplicate của public zone) |
 | `POST` | `/verify/:documentId` | `verifyDocumentByUpload` | Verify qua upload (duplicate) |
-
-**Luồng nộp hồ sơ (Citizen flow):**
-```
-1. Citizen điền form CT01 → POST /preview
-   → validateCT01() kiểm tra dữ liệu
-   → createPreviewDocument() dùng pdf-lib điền form CT01.pdf
-   → Trả về preview_id + preview_url
-
-2. Citizen xem trước PDF (iframe) → xác nhận
-
-3. Citizen submit → POST /submit
-   → Kiểm tra preview hợp lệ, chưa hết hạn
-   → submitDocument(): copy PDF → storage/documents/{id}/original.pdf
-   → Hash file, tạo bản ghi status="submitted"
-   → Lưu thành viên hộ gia đình (nếu có)
-   → Audit log
-
-4. Document chuyển sang tab "Chờ duyệt" của Officer
-```
-
-**Luồng ký số (Officer flow):**
-```
-1. Officer xem hồ sơ pending → POST /{id}/sign-challenge
-   → Tạo challenge: nonce + payload + TTL 5 phút
-   → Payload chứa: action="approve_document", documentId, fileHash, keyId
-   → Trả payload cho officer ký (nếu dùng device key)
-
-2. Officer ký challenge → POST /{id}/sign
-   → verifyOfficerSignatureProof(): kiểm tra challenge + chữ ký officer
-   → Hoặc auto-ký (dev mode, ALLOW_SERVER_SIDE_PERSONAL_KEYS=true)
-
-3. Server xử lý:
-   a. Generate QR code (chứa verify_url + token)
-   b. Embed QR + metadata vào PDF → signed.pdf
-   c. Hash signed.pdf → fileHash
-   d. buildSignaturePayload() → canonical JSON
-   e. signPayload() → Falcon-512 sign với organization key
-   f. Tạo 2 signature records:
-      - officer_personal_falcon (chữ ký cá nhân officer)
-      - organization_falcon (chữ ký tổ chức)
-   g. Ghi signature-evidence.json
-   h. Update document status → "issued"
-
-4. Citizen thấy "Đã ký" + nút tải PDF + link xác minh
-```
-
-**Luồng từ chối:**
-```
-Officer → POST /{id}/reject { reason: "..." }
-    → rejectDocument(): status → "rejected", lưu rejection_reason
-    → Audit log
-```
-
-**Bảo mật Application Zone:**
-- `authenticate` middleware: JWT từ httpOnly cookie hoặc Bearer header
-- `requireRole("officer", "admin")`: RBAC check trên `req.user.roles`
-- `canAccessDocument()`: citizen chỉ thấy hồ sơ của mình
-- `validateFilePath()`: chống path traversal khi tải file
-- `safeError()`: không leak internal error trong production
 
 ---
 
@@ -197,7 +139,6 @@ attachNetworkZone(CRYPTO) → requireCryptoZoneAccess → cryptoRoutes
 // requireCryptoZoneAccess kiểm tra header:
 x-internal-crypto-secret: <INTERNAL_CRYPTO_SECRET từ .env>
 ```
-Nếu secret sai → 401 "Crypto Zone access denied" + audit log.
 
 **Endpoints:**
 
@@ -206,43 +147,26 @@ Nếu secret sai → 401 "Crypto Zone access denied" + audit log.
 | `GET` | `/public-key` | `cryptoGetPublicKey` | Lấy active Falcon-512 public key |
 | `POST` | `/sign` | `cryptoSign` | Ký payload với active key |
 | `POST` | `/verify` | `cryptoVerify` | Verify chữ ký against public key |
-| `POST` | `/keys/external-public` | `cryptoRegisterExternalPublicKey` | Đăng ký public key bên ngoài (device key) |
-
-**Luồng ký trong Crypto Zone:**
-```
-cryptoSign({ payload }):
-    1. buildSignaturePayload(payload) → canonical JSON (alphabetical keys, snake_case, no whitespace)
-    2. keyManagerService.getActivePublicKey() → lấy active key metadata
-    3. keyManagerService.getPrivateKey(keyId, INTERNAL_CRYPTO_SECRET)
-       → Giải mã private key từ falcon-keystore.json
-       → AES-256-GCM decryption với scrypt-derived key
-    4. falconService.sign(canonicalPayload, privateKeyBase64)
-       → @noble/post-quantum FALCON-512 signing
-    5. Trả { signature, key_id, algorithm, provider }
-```
+| `POST` | `/keys/external-public` | `cryptoRegisterExternalPublicKey` | Đăng ký public key bên ngoài |
 
 **Kiến trúc Crypto (3 layers):**
 ```
 ┌─────────────────────────────────────────┐
 │  crypto.controller.js                   │  HTTP layer
-│  (cryptoSign, cryptoVerify, ...)        │
 ├─────────────────────────────────────────┤
 │  crypto/signature.service.js            │  Service layer (delegation)
-│  (signPayload, verifyPayloadSignature,  │   - buildSignaturePayload
-│   getActiveKey, signPayloadWithKey)     │   - signPayload → keyManager → falcon
+│  - buildSignaturePayload()              │  - Canonical JSON
+│  - signPayload() → keyManager → falcon  │  - Key resolution
+│  - verifyPayloadSignature()             │  - NEVER throws
 ├─────────────────────────────────────────┤
 │  crypto/falcon/falcon.service.js        │  Domain layer
-│  (signaturePayload, sign, verify)       │   - Canonical JSON construction
-│                                         │   - Size validation
-│                                         │   - Error swallowing (verify NEVER throws)
+│  - signaturePayload()                   │  - Alphabetical keys, snake_case
+│  - sign() / verify()                    │  - Size validation
 ├─────────────────────────────────────────┤
 │  crypto/falcon/falcon.adapter.js        │  Adapter layer
-│  (FALCON512.keypair, sign, verify)      │   - @noble/post-quantum wrapper
-│                                         │   - Lazy loading
-│                                         │   - Typed errors
+│  - @noble/post-quantum wrapper          │  - Lazy loading
 ├─────────────────────────────────────────┤
-│  @noble/post-quantum                    │  Library
-│  (FALCON-512 implementation)            │
+│  @noble/post-quantum (FALCON-512)       │  Library
 └─────────────────────────────────────────┘
 ```
 
@@ -253,68 +177,236 @@ falcon-keystore.json (encrypted):
   "keys": [
     {
       "key_id": "falcon-xxx",
-      "algorithm": "FALCON-512",
-      "owner_type": "organization",
-      "owner_id": "PUBLIC-AUTHORITY-DEMO",
+      "owner_type": "user" | "organization",
+      "owner_id": "1" | "PUBLIC-AUTHORITY-DEMO",
       "public_key": "<base64 897 bytes>",
-      "private_key_encrypted": "<base64 AES-256-GCM ciphertext>",
-      "encryption": {
-        "algorithm": "aes-256-gcm",
-        "kdf": "scrypt",
-        "salt": "...",
-        "iv": "...",
-        "tag": "..."
-      },
+      "private_key_encrypted": "<base64 AES-256-GCM>",
+      "encryption": { "algorithm": "aes-256-gcm", "kdf": "scrypt", ... },
       "status": "active",
-      "created_at": "2026-..."
+      "provider": "file" | "officer-device" | "external-device"
     }
   ]
 }
 
 Private key encryption:
-  INTERNAL_CRYPTO_SECRET → scrypt(salt) → AES-256-GCM key
-  → Giải mã private key khi cần ký
+  INTERNAL_CRYPTO_SECRET → scrypt(salt) → AES-256-GCM key → decrypt private key
 ```
 
 ---
 
 ### 2.4. Data Zone (File System Only)
 
-**Mục đích:** Lưu trữ vật lý — file PDF, metadata JSON, audit logs, keystore. Không expose HTTP route.
+**Mục đích:** Lưu trữ vật lý. Không expose HTTP route.
 
-**Cấu trúc storage:**
 ```
 backend/storage/documents/{HS-2026-XXXXXXXX}/
-    ├── original.pdf          # PDF gốc (từ preview)
-    ├── signed.pdf            # PDF đã ký (nếu issued)
-    ├── metadata.json         # Document record
-    ├── signature-evidence.json  # Chi tiết chữ ký (2 records)
-    └── qr/
-        └── qr.png            # QR code (nếu issued)
+    ├── original.pdf
+    ├── signed.pdf              (nếu issued)
+    ├── metadata.json
+    ├── signature-evidence.json
+    └── qr/qr.png               (nếu issued)
 
 backend/src/data/
-    ├── users.json            # User accounts (JSON mode)
-    ├── documents.json        # Document records (JSON mode)
-    ├── document_signatures.json  # Signature records (JSON mode)
-    ├── audit_logs.json       # Audit trail (JSON mode)
-    └── household_members.json    # Household members (JSON mode)
+    ├── users.json
+    ├── documents.json
+    ├── document_signatures.json
+    ├── audit_logs.json
+    └── household_members.json
 
 backend/src/crypto/keys/
-    └── falcon-keystore.json  # Encrypted Falcon-512 keys
+    └── falcon-keystore.json    (encrypted Falcon-512 keys)
 ```
-
-**Dual-mode storage:**
-- `DB_STORAGE_TYPE=json` (default): Đọc/ghi file JSON đồng bộ (blocking event loop)
-- `DB_STORAGE_TYPE=mysql`: Connection pool mysql2/promise, schema tự migrate từ `DB/db.sql`
 
 ---
 
-## 3. Middleware Chain tổng thể
+## 3. Signing Modes — Chế độ ký số
+
+Hệ thống hỗ trợ 2 chế độ ký số, được cấu hình qua biến môi trường `SIGNING_MODE`:
+
+```env
+# .env
+SIGNING_MODE=hsm     # Mặc định — server HSM ký thay officer
+SIGNING_MODE=device  # Officer giữ private key trên device
+```
+
+### 3.1. So sánh 2 chế độ
+
+| Aspect | HSM Mode (`hsm`) | Device Mode (`device`) |
+|---|---|---|
+| **Ai giữ private key?** | Server (encrypted keystore) | Officer (browser localStorage) |
+| **Officer cần gì để ký?** | Chỉ cần đăng nhập (JWT) | Phải có Falcon-512 key trên device |
+| **Ai ký officer signature?** | Server ký hộ (sau JWT auth) | Officer ký trên device |
+| **Identity binding** | JWT + audit log | Device key (cryptographic proof) |
+| **Server giả mạo được?** | ⚠️ Có thể (server có private key) | ❌ Không thể (không có private key) |
+| **Dashboard UI** | 🔵 Banner "Chế độ HSM" | 🔴/🟢 Device key registration |
+| **Phù hợp** | Demo, dev, không có hardware key | Production, có PKI infrastructure |
+
+### 3.2. Config derivation
+
+```javascript
+// env.config.js — SIGNING_MODE là nguồn gốc
+const SIGNING_MODE = process.env.SIGNING_MODE || "hsm";
+
+// Derived (có thể override riêng lẻ nếu cần)
+const ALLOW_SERVER_SIDE_PERSONAL_KEYS = SIGNING_MODE === "hsm";
+const REQUIRE_OFFICER_DEVICE_SIGNATURE = SIGNING_MODE === "device";
+```
+
+### 3.3. HSM Mode Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  OFFICER ĐĂNG NHẬP                                              │
+│  ─────────────────                                              │
+│  POST /api/auth/login { email, password }                       │
+│  → bcrypt.compare(password, stored_hash)                        │
+│  → JWT = sign({ id, email, full_name, roles })                  │
+│  → Set httpOnly cookie (XSS-safe)                               │
+│  → Identity: req.user = { id: "1", full_name: "Can bo Nguyen" } │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────────┐
+│  OFFICER KÝ SỐ (HSM)                                            │
+│  ────────────────────                                            │
+│  1. Officer click "Ký số" trên dashboard                        │
+│  2. Confirm: "Ký số bởi HSM server với danh tính: Can bo Nguyen"│
+│  3. POST /api/app/documents/{id}/sign {}                        │
+│                                                                 │
+│  Server (HSM) xử lý:                                            │
+│    a. authenticate middleware → req.user từ JWT                  │
+│    b. resolveSignerContext(req.user.id) → lấy officer info       │
+│    c. getOfficerPersonalKey() → lấy/tạo officer key từ keystore │
+│    d. buildSignaturePayload({ action: "approve_document", ... }) │
+│    e. signPayloadWithKey(payload, officerKey.key_id)             │
+│       → decrypt private key (AES-256-GCM + scrypt)              │
+│       → FALCON-512.sign(payload, privateKey)                    │
+│    f. generateQrCode() + embedQrIntoPdf() → signed.pdf          │
+│    g. signPayload(payload) → organization signature              │
+│    h. Tạo 2 signature records:                                   │
+│       - officer_personal_falcon (officer key)                    │
+│       - organization_falcon (org key)                            │
+│    i. writeAuditLog({ action: "sign", userId: officer.id })      │
+│                                                                 │
+│  ✅ 2 chữ ký, audit trail đầy đủ                                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 3.4. Device Mode Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  OFFICER ĐĂNG KÝ DEVICE KEY (lần đầu)                           │
+│  ────────────────────────────────────                            │
+│  1. Dashboard hiển thị banner "Chưa có khóa ký"                 │
+│  2. Officer click "Đăng ký ngay"                                 │
+│  3. Browser generate Falcon-512 keypair (897 + 1281 bytes)       │
+│     → @noble/post-quantum loaded via importmap (esm.sh CDN)      │
+│  4. Private key → localStorage (KHÔNG gửi lên server)            │
+│  5. Public key → POST /api/app/documents/register-device-key     │
+│  6. Server lưu vào falcon-keystore.json (provider: "officer-device")│
+│                                                                 │
+│  ✅ Private key KHÔNG BAO GIỜ rời browser                       │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────────┐
+│  OFFICER KÝ SỐ (Device)                                         │
+│  ─────────────────────                                           │
+│  1. Officer click "Ký số"                                        │
+│  2. POST /sign-challenge → server tạo challenge                  │
+│     { challenge_id, payload, payload_hash, expires_at (5 min) }  │
+│  3. Browser ký challenge bằng device private key                 │
+│     → FALCON-512.sign(payload, devicePrivateKey)                │
+│  4. POST /sign { officer_signature_proof: {                      │
+│       challenge_id, signature } }                                │
+│  5. Server verifyOfficerSignatureProof():                        │
+│     a. Tìm challenge theo challenge_id                           │
+│     b. Kiểm tra: pending, đúng document, đúng officer, chưa hết hạn│
+│     c. verifyPayloadSignature(signature, payload, publicKey)     │
+│     d. markChallengeUsed(challenge_id)                           │
+│  6. Server ký organization signature                             │
+│  7. Tạo 2 signature records                                      │
+│                                                                 │
+│  ✅ Không ai có thể giả mạo (không có private key)               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 3.5. Backend branching logic
+
+```javascript
+// document.service1.js — signDocument()
+if (!officerApproval) {
+    if (SIGNING_MODE === "device") {
+        // DEVICE MODE: Bắt buộc phải có proof
+        if (officerHasKey) {
+            throw new Error("Officer device signature proof is required");
+        } else {
+            throw new Error("Officer has not registered a device key");
+        }
+    }
+
+    // HSM MODE: Server ký thay officer (JWT auth = identity)
+    const officerKey = await getOfficerPersonalKey(signer);
+    officerSignatureInfo = await signPayloadWithKey(payload, officerKey.key_id);
+}
+```
+
+### 3.6. Frontend branching logic
+
+```javascript
+// officer/dashboard.html — signDoc()
+if (signingMode === "device") {
+    // DEVICE: challenge-response
+    const res = await crypto.signDocumentWithDeviceKey(docId, officerInfo);
+} else {
+    // HSM: server signs on behalf
+    const res = await apiPost(`/app/documents/${docId}/sign`, {});
+}
+```
+
+---
+
+## 4. Authentication Flow
+
+```
+┌──────────┐                    ┌──────────────┐
+│  Browser  │                    │  Backend     │
+└─────┬────┘                    └──────┬───────┘
+      │                                │
+      │ POST /api/auth/register        │
+      │ { full_name, email, password } │
+      │───────────────────────────────►│
+      │                                │ bcrypt.hash(password, 10)
+      │                                │ Save to users.json / MySQL
+      │◄───────────────────────────────│
+      │                                │
+      │ POST /api/auth/login           │
+      │ { email, password }            │
+      │───────────────────────────────►│
+      │                                │ bcrypt.compare()
+      │                                │ jwt.sign({ id, email, full_name, roles })
+      │                                │ Set httpOnly cookie: token=JWT
+      │◄───────────────────────────────│
+      │ { data: { user } }             │  ← Token NOT in body (XSS-safe)
+      │                                │
+      │ GET /api/app/documents         │  (subsequent requests)
+      │ Cookie: token=JWT              │
+      │───────────────────────────────►│
+      │                                │ extractToken(): cookie > Bearer
+      │                                │ jwt.verify() → req.user
+      │◄───────────────────────────────│
+      │ [data]                         │
+```
+
+**Roles:** `citizen` (xem/submit), `officer` (ký/từ chối), `admin` (toàn quyền)
+
+---
+
+## 5. Middleware Chain tổng thể
 
 ```
 Request →
     cors()                          # CORS headers
-    → helmet()                      # Security headers (CSP, HSTS, ...)
+    → helmet()                      # Security headers (CSP enabled)
     → express.json()                # Body parser
     → cookieParser()                # Cookie parser
     → /api: globalLimiter           # 100 req/15min
@@ -331,7 +423,7 @@ Request →
 
 ---
 
-## 4. Luồng dữ liệu end-to-end: Nộp → Ký → Xác minh
+## 6. Luồng dữ liệu end-to-end: Nộp → Ký → Xác minh
 
 ```
 ┌───────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
@@ -343,132 +435,185 @@ Request →
       │─────────────────►│                     │                     │
       │                  │ createPreviewDocument()                   │
       │                  │──────────────────────────────────────────►│
-      │                  │                     │         CT01.pdf fill
-      │◄─────────────────│                     │                     │
+      │◄─────────────────│                     │         CT01.pdf    │
       │ preview_id       │                     │                     │
       │                  │                     │                     │
       │ POST /submit     │                     │                     │
       │─────────────────►│                     │                     │
       │                  │ submitDocument()     │                     │
       │                  │──────────────────────────────────────────►│
-      │                  │                     │         original.pdf
-      │◄─────────────────│                     │         status=submitted
-      │ document_id      │                     │                     │
+      │◄─────────────────│                     │         original.pdf│
+      │ document_id      │                     │         status=sub  │
       │                  │                     │                     │
       │         ┌────────OFFICER────────┐      │                     │
-      │         │ POST /{id}/sign       │      │                     │
+      │         │ (HSM mode)            │      │                     │
+      │         │ POST /{id}/sign {}    │      │                     │
       │         │──────────────────────►│      │                     │
-      │         │                       │ signPayload()              │
+      │         │                       │ signPayloadWithKey()       │
       │         │                       │──────►│                    │
-      │         │                       │       │ getPrivateKey()    │
-      │         │                       │       │───────────────────►│
-      │         │                       │       │ falcon-keystore    │
-      │         │                       │       │◄───────────────────│
+      │         │                       │       │ decrypt privateKey │
       │         │                       │       │ FALCON-512 sign    │
       │         │                       │◄──────│                    │
       │         │                       │                     │
-      │         │                       │ generateQrCode()    │
-      │         │                       │ embedQrIntoPdf()    │
+      │         │                       │ generateQr + embed  │
       │         │                       │────────────────────────────►│
-      │         │                       │                     signed.pdf
-      │         │                       │                     metadata
-      │         │◄──────────────────────│                     │
+      │         │◄──────────────────────│                     signed│
       │         │ issued                │                     │
-      │         └───────────────────────┘                     │
       │                                                       │
       │    ┌───ANYONE (QR scan)───┐                          │
       │    │ GET /verify?id=&token=│                          │
       │    │──────────────────────►│                          │
       │    │                       │ verifyDocument()         │
       │    │                       │─────────────────────────►│
-      │    │                       │               hash check + Falcon verify
-      │    │◄──────────────────────│                          │
-      │    │ valid: true/false     │                          │
-      │    └───────────────────────┘                          │
+      │    │◄──────────────────────│              hash + Falcon verify
+      │    │ valid + signer info   │                          │
 ```
 
 ---
 
-## 5. Authentication Flow
+## 7. API Endpoints tổng hợp
 
-```
-┌──────────┐                    ┌──────────────┐
-│  Browser  │                    │  Backend     │
-└─────┬────┘                    └──────┬───────┘
-      │                                │
-      │ POST /api/auth/register        │
-      │ { full_name, email, password } │
-      │───────────────────────────────►│
-      │                                │ bcrypt.hash(password, 10)
-      │                                │ Save to users.json / MySQL
-      │◄───────────────────────────────│
-      │ { message: "Registered" }      │
-      │                                │
-      │ POST /api/auth/login           │
-      │ { email, password }            │
-      │───────────────────────────────►│
-      │                                │ bcrypt.compare()
-      │                                │ jwt.sign({ id, email, full_name, roles })
-      │                                │ Set httpOnly cookie: token=JWT
-      │◄───────────────────────────────│
-      │ { data: { user } }             │  ← Token NOT in body (XSS-safe)
-      │                                │
-      │ GET /api/app/documents         │
-      │ Cookie: token=JWT              │
-      │───────────────────────────────►│
-      │                                │ extractToken(): cookie > Bearer header
-      │                                │ jwt.verify(token, JWT_SECRET)
-      │                                │ req.user = { id, email, full_name, roles }
-      │◄───────────────────────────────│
-      │ [documents data]               │
-      │                                │
-      │ POST /api/auth/logout          │
-      │───────────────────────────────►│
-      │                                │ Clear cookie
-      │◄───────────────────────────────│
-      │ { message: "Logged out" }      │
-```
+### Public Zone (`/api/public`)
 
-**Roles:**
-- `citizen`: Xem/submit hồ sơ của mình
-- `officer`: Xem tất cả, ký số, từ chối
-- `admin`: Toàn quyền (giống officer)
+| Method | Path | Auth | Mô tả |
+|---|---|---|---|
+| `GET` | `/network-model` | ❌ | Mô hình 4-zone |
+| `GET` | `/keys/:keyId` | ❌ | Public key theo ID |
+| `GET` | `/documents/verify/:id` | ❌ | Verify qua QR |
+| `POST` | `/documents/verify/:id` | ❌ | Verify qua upload |
+
+### Application Zone (`/api/app/documents`)
+
+| Method | Path | Auth | Mô tả |
+|---|---|---|---|
+| `GET` | `/` | JWT | Liệt kê hồ sơ |
+| `POST` | `/preview` | JWT | Tạo PDF preview |
+| `GET` | `/previews/:id/file` | JWT | Tải preview PDF |
+| `POST` | `/submit` | JWT | Nộp hồ sơ |
+| `GET` | `/:id` | JWT | Chi tiết hồ sơ |
+| `GET` | `/:id/download` | JWT | Tải PDF gốc |
+| `GET` | `/:id/signed-pdf` | JWT/token | Tải PDF đã ký |
+| `GET` | `/pending` | Officer | Hồ sơ chờ duyệt |
+| `GET` | `/issued` | Officer | Hồ sơ đã ký |
+| `GET` | `/rejected` | Officer | Hồ sơ đã từ chối |
+| `POST` | `/register-device-key` | Officer | Đăng ký device key |
+| `GET` | `/check-device-key` | Officer | Kiểm tra key + mode |
+| `POST` | `/:id/sign-challenge` | Officer | Tạo signing challenge |
+| `POST` | `/:id/sign` | Officer | Ký số (HSM hoặc device) |
+| `POST` | `/:id/reject` | Officer | Từ chối hồ sơ |
+
+### Crypto Zone (`/api/internal/crypto`)
+
+| Method | Path | Auth | Mô tả |
+|---|---|---|---|
+| `GET` | `/public-key` | Secret | Active public key |
+| `POST` | `/sign` | Secret | Ký payload |
+| `POST` | `/verify` | Secret | Verify chữ ký |
+| `POST` | `/keys/external-public` | Secret | Đăng ký external key |
+
+### Auth (`/api/auth`)
+
+| Method | Path | Auth | Mô tả |
+|---|---|---|---|
+| `POST` | `/register` | ❌ | Đăng ký citizen |
+| `POST` | `/login` | ❌ | Đăng nhập |
+| `POST` | `/logout` | ❌ | Đăng xuất |
+| `GET` | `/me` | JWT | Thông tin user hiện tại |
 
 ---
 
-## 6. Đánh giá & nhận xét
+## 8. Signature Records
+
+Mỗi lần ký số tạo 2 bản ghi chữ ký:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Signature 1: officer_personal_falcon                           │
+│  ├── type: "officer_personal_falcon"                            │
+│  ├── key: officer personal key (Falcon-512)                     │
+│  ├── payload: { action: "approve_document", documentId, ... }   │
+│  ├── signer: { user_id, full_name, role }  (từ JWT hoặc device) │
+│  ├── signed_file_hash: original file hash                       │
+│  └── Ý nghĩa: "Officer này đã duyệt hồ sơ"                    │
+│                                                                 │
+│  Signature 2: organization_falcon                               │
+│  ├── type: "organization_falcon"                                │
+│  ├── key: organization key (Falcon-512)                         │
+│  ├── payload: { documentId, fileHash, issuedAt, ... }           │
+│  ├── signer: officer info (từ JWT)                              │
+│  ├── signed_file_hash: signed PDF hash                          │
+│  └── Ý nghĩa: "Tổ chức phát hành tài liệu này"                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Verify flow kiểm tra cả 2 chữ ký:**
+```
+organization_signature_valid = verify(org_signature, org_public_key)
+officer_signature_valid = verify(officer_signature, officer_public_key)
+valid = organization_signature_valid && officer_signature_valid
+```
+
+---
+
+## 9. Files đã thay đổi
+
+| File | Thay đổi |
+|---|---|
+| [env.config.js](../backend/src/config/env.config.js) | Thêm `SIGNING_MODE`, derive flags |
+| [document.service1.js](../backend/src/services/document.service1.js) | `signDocument()` phân nhánh HSM/device |
+| [document.controller.js](../backend/src/controllers/document.controller.js) | Thêm `registerDeviceKeyHandler`, `checkDeviceKeyHandler` |
+| [document.routes.js](../backend/src/routes/document.routes.js) | Thêm routes `/register-device-key`, `/check-device-key` |
+| [crypto.js](../frontend/js/crypto.js) | **Mới** — Client-side Falcon-512 key manager |
+| [officer/dashboard.html](../frontend/officer/dashboard.html) | Key registration UI + dual-mode signing |
+| [api.js](../frontend/js/api.js) | Thêm `sanitize()`, `showAlert()`, `downloadDocument()`, fix auth flow |
+| [auth.js](../frontend/js/auth.js) | Cookie-based auth (no token in body) |
+| [app.js](../backend/src/app.js) | CSP enabled |
+| [error-handler.middleware.js](../backend/src/middlewares/error-handler.middleware.js) | Fix unreachable branch |
+| [auth.controller.js](../backend/src/controllers/auth.controller.js) | JWT chỉ trong cookie |
+| [household_members.repository.js](../backend/src/repositories/household_members.repository.js) | Thêm JSON fallback |
+| [package.json](../backend/package.json) | Dọn deps, fix script path |
+| [.env.example](../backend/.env.example) | Document SIGNING_MODE |
+| [citizen/dashboard.html](../frontend/citizen/dashboard.html) | XSS fixes, error handling |
+
+---
+
+## 10. Đánh giá & nhận xét
 
 ### Điểm mạnh
 
 | Aspect | Đánh giá |
 |---|---|
-| **Zone isolation** | 4 zones rõ ràng, mỗi zone có middleware bảo vệ riêng. Crypto zone được protect bằng shared secret, tách biệt khỏi business logic |
-| **Crypto architecture** | 3-layer delegation (adapter → service → controller) clean, dễ thay đổi implementation Falcon |
-| **Key management** | Private key encrypted AES-256-GCM + scrypt, không bao giờ expose trong response |
-| **Canonical payload** | Alphabetical keys, snake_case, no whitespace → đảm bảo reproducible signatures |
-| **verify NEVER throws** | `falconService.verify` và `verifyPayloadSignature` luôn trả boolean, không leak exception |
-| **Audit logging** | Mọi operation quan trọng (sign, verify, key access) đều ghi audit log |
-| **Rate limiting** | 3 tiers riêng biệt (global, auth, verify) chống abuse |
-| **Dual-mode storage** | Repository pattern cho phép switch JSON ↔ MySQL mà không đổi business logic |
+| **Zone isolation** | 4 zones rõ ràng, mỗi zone có middleware bảo vệ riêng |
+| **Flexible signing modes** | HSM (demo/dev) ↔ Device (production) chỉ qua 1 env var |
+| **Crypto architecture** | 3-layer delegation clean, dễ thay đổi implementation |
+| **Key management** | Private key encrypted AES-256-GCM + scrypt, không expose trong response |
+| **Canonical payload** | Alphabetical keys, snake_case, no whitespace → reproducible signatures |
+| **verify NEVER throws** | Luôn trả boolean, không leak exception |
+| **Audit logging** | Mọi operation quan trọng đều ghi audit log |
+| **Rate limiting** | 3 tiers riêng biệt (global, auth, verify) |
+| **Dual-mode storage** | Repository pattern cho JSON ↔ MySQL |
+| **Client-side crypto** | @noble/post-quantum via importmap, private key không rời browser |
 
 ### Vấn đề còn tồn tại
 
 | # | Severity | Issue | Zone |
 |---|---|---|---|
-| 1 | **HIGH** | JSON repos dùng `fs.readFileSync`/`writeFileSync` — block event loop trên mọi request | Data |
-| 2 | **HIGH** | `listDocuments()` load ALL documents, filter in-memory — O(N), không pagination | App |
-| 3 | **MEDIUM** | `securityHeaders` middleware đã define nhưng không được mount ở route nào | Global |
-| 4 | **MEDIUM** | `household_members.repository.js` chỉ mới có JSON + MySQL mode, nhưng `saveMembersForDocument` trong controller gọi trực tiếp (không qua service layer) | App |
-| 5 | **MEDIUM** | Crypto zone secret so sánh plain string (`providedSecret !== INTERNAL_CRYPTO_SECRET`) — nên dùng timing-safe comparison | Crypto |
-| 6 | **LOW** | `GET /api/app/documents/verify/:documentId` và `POST /...` duplicate với public zone routes | App |
-| 7 | **LOW** | Legacy endpoints (`/upload`, `/issue`) vẫn mount trong production (chỉ trả 410) — nên remove hoàn toàn | App |
-| 8 | **LOW** | `getDocumentsByStatus` và `getDocumentsByOwner` gọi `getDocument()` cho mỗi doc → N+1 query pattern | App |
+| 1 | **HIGH** | JSON repos dùng `fs.readFileSync`/`writeFileSync` — block event loop | Data |
+| 2 | **HIGH** | `listDocuments()` load ALL documents, filter in-memory — O(N) | App |
+| 3 | **MEDIUM** | `securityHeaders` middleware đã define nhưng không mount | Global |
+| 4 | **MEDIUM** | Crypto zone secret so sánh plain string — nên dùng timing-safe | Crypto |
+| 5 | **LOW** | Legacy endpoints (`/upload`, `/issue`) vẫn mount (trả 410) | App |
+| 6 | **LOW** | N+1 query pattern trong `getDocumentsByStatus`/`getDocumentsByOwner` | App |
+| 7 | **LOW** | `processDocument` (legacy) vẫn dùng server-side signing, không theo SIGNING_MODE | App |
 
-### Đề xuất cải thiện
+### Chuyển đổi giữa 2 chế độ
 
-1. **Async I/O cho JSON repos**: Chuyển `readFileSync`/`writeFileSync` sang `readFile`/`writeFile` (hoặc dùng `proper-lockfile` cho concurrency)
-2. **Pagination**: Thêm `?page=1&limit=20` cho `listDocuments`, `getDocumentsByStatus`, `getDocumentsByOwner`
-3. **Timing-safe comparison**: Dùng `crypto.timingSafeEqual()` cho `requireCryptoZoneAccess`
-4. **Remove legacy endpoints**: Xóa `/upload` và `/issue` routes (hiện chỉ là dead code trong production)
-5. **Wire up securityHeaders**: Mount `securityHeaders` middleware vào route chain hoặc xóa nếu redundant với helmet
-6. **N+1 query optimization**: JOIN query trong MySQL mode, hoặc batch lookup trong JSON mode
+```env
+# HSM mode (demo/dev — server ký thay officer)
+SIGNING_MODE=hsm
+
+# Device mode (production — officer giữ private key)
+SIGNING_MODE=device
+```
+
+Chỉ cần đổi `SIGNING_MODE` trong `.env` → restart server → dashboard tự động thích ứng.

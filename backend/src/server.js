@@ -11,6 +11,7 @@ import { NETWORK_ZONES } from "./config/network.config.js";
 import {
     attachNetworkZone,
     requireCryptoZoneAccess,
+    securityHeaders,
 } from "./middlewares/network-zone.middleware.js";
 
 import authRoutes from "./routes/auth.routes.js";
@@ -52,6 +53,9 @@ await seedDefaultUsers();
 const PORT = process.env.PORT || 3000;
 
 // ===================== ROUTE MOUNTING =====================
+
+// Additional security headers
+app.use(securityHeaders);
 
 // Global rate limiter for all API routes
 app.use("/api", globalLimiter);

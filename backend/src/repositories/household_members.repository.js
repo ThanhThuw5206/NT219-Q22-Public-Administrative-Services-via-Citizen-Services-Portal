@@ -1,4 +1,4 @@
-import fs from "fs";
+import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import db from "../config/db.js";
@@ -11,21 +11,20 @@ const dataDirectory = path.resolve(__dirname, "../data");
 const dataFilePath = path.join(dataDirectory, "household_members.json");
 
 // ==========================================
-// CHẾ ĐỘ FILE JSON
+// CHẾ ĐỘ FILE JSON (async I/O)
 // ==========================================
 const jsonRepo = {
-    readAll() {
-        fs.mkdirSync(dataDirectory, { recursive: true });
-        if (!fs.existsSync(dataFilePath)) return [];
-        return JSON.parse(fs.readFileSync(dataFilePath, "utf8"));
+    async readAll() {
+        await fs.mkdir(dataDirectory, { recursive: true });
+        try { return JSON.parse(await fs.readFile(dataFilePath, "utf8")); } catch { return []; }
     },
-    writeAll(members) {
-        fs.mkdirSync(dataDirectory, { recursive: true });
-        fs.writeFileSync(dataFilePath, JSON.stringify(members, null, 2));
+    async writeAll(members) {
+        await fs.mkdir(dataDirectory, { recursive: true });
+        await fs.writeFile(dataFilePath, JSON.stringify(members, null, 2));
     },
     async saveMembersForDocument(documentId, members) {
         if (!members || members.length === 0) return;
-        const all = this.readAll();
+        const all = await this.readAll();
         const maxId = all.length > 0 ? Math.max(...all.map(m => m.id)) : 0;
         const newMembers = members.map((m, idx) => ({
             id: maxId + idx + 1,
@@ -37,10 +36,10 @@ const jsonRepo = {
             relationship_to_head: m.relationship_to_head || null
         }));
         all.push(...newMembers);
-        this.writeAll(all);
+        await this.writeAll(all);
     },
     async getMembersForDocument(documentId) {
-        const all = this.readAll();
+        const all = await this.readAll();
         return all
             .filter(m => m.document_id === documentId)
             .sort((a, b) => a.id - b.id);

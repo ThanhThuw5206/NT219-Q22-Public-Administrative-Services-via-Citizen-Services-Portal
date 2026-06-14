@@ -269,14 +269,19 @@
                     deviceKeyRegistered = true;
                     updateKeyBanner("hsm");
                 } else if (res?.registered) {
-                    // Device mode: check local key
+                    // Device mode: check local key (wait for crypto module if not ready)
                     deviceKeyRegistered = true;
                     const crypto = window.cryptoModule;
-                    const localKeyExists = crypto?.hasDeviceKey(officerId);
-                    updateKeyBanner(localKeyExists ? "device-ok" : "device-missing-local");
-                    if (localKeyExists) {
-                        document.getElementById("deviceKeyInfo").textContent =
-                            `✅ Khóa ký thiết bị đã đăng ký (Key ID: ${res.key_id})`;
+                    if (crypto) {
+                        const localKeyExists = crypto.hasDeviceKey(officerId);
+                        updateKeyBanner(localKeyExists ? "device-ok" : "device-missing-local");
+                        if (localKeyExists) {
+                            document.getElementById("deviceKeyInfo").textContent =
+                                `✅ Khóa ký thiết bị đã đăng ký (Key ID: ${res.key_id})`;
+                        }
+                    } else {
+                        // Crypto module not ready yet — show ok banner, will correct on crypto-ready
+                        updateKeyBanner("device-ok");
                     }
                 } else {
                     deviceKeyRegistered = false;
@@ -359,7 +364,7 @@
                 progress.style.display = "none";
 
                 deviceKeyRegistered = true;
-                updateKeyBanner(true);
+                updateKeyBanner("device-ok");
                 document.getElementById("deviceKeyInfo").textContent =
                     `✅ Khóa ký thiết bị đã đăng ký (Key ID: ${result.key_id})`;
             } catch (err) {
