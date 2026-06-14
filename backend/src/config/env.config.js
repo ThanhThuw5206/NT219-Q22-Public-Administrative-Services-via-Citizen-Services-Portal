@@ -27,15 +27,31 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "24h";
 
 const DB_STORAGE_TYPE = process.env.DB_STORAGE_TYPE || "json";
 
+/**
+ * Signing mode: "hsm" | "device"
+ *
+ * - "hsm" (default): Server acts as a simulated HSM.
+ *   Officer authenticates via JWT, server holds personal keys in encrypted
+ *   keystore and signs on officer's behalf. Identity binding comes from JWT
+ *   + audit trail. Officer does NOT need a device key.
+ *
+ * - "device": Officer holds Falcon-512 private key on their device (browser).
+ *   Server only stores the public key. Officer signs challenges client-side
+ *   and sends proof to server. Strongest identity proof — private key never
+ *   leaves the device.
+ */
+const SIGNING_MODE = process.env.SIGNING_MODE || "hsm";
+
+// Derived from SIGNING_MODE for backward compatibility
 const ALLOW_SERVER_SIDE_PERSONAL_KEYS =
     process.env.ALLOW_SERVER_SIDE_PERSONAL_KEYS !== undefined
         ? process.env.ALLOW_SERVER_SIDE_PERSONAL_KEYS === "true"
-        : NODE_ENV !== "production";
+        : SIGNING_MODE === "hsm";
 
 const REQUIRE_OFFICER_DEVICE_SIGNATURE =
     process.env.REQUIRE_OFFICER_DEVICE_SIGNATURE !== undefined
         ? process.env.REQUIRE_OFFICER_DEVICE_SIGNATURE === "true"
-        : NODE_ENV === "production";
+        : SIGNING_MODE === "device";
 
 const ALLOW_FILE_ORGANIZATION_SEAL_IN_PRODUCTION =
     process.env.ALLOW_FILE_ORGANIZATION_SEAL_IN_PRODUCTION === "true";
@@ -86,6 +102,7 @@ const env = Object.freeze({
     JWT_EXPIRES_IN,
     IS_DEV,
     DB_STORAGE_TYPE,
+    SIGNING_MODE,
     ALLOW_SERVER_SIDE_PERSONAL_KEYS,
     REQUIRE_OFFICER_DEVICE_SIGNATURE,
     ALLOW_FILE_ORGANIZATION_SEAL_IN_PRODUCTION,
@@ -100,6 +117,7 @@ export {
     JWT_EXPIRES_IN,
     IS_DEV,
     DB_STORAGE_TYPE,
+    SIGNING_MODE,
     ALLOW_SERVER_SIDE_PERSONAL_KEYS,
     REQUIRE_OFFICER_DEVICE_SIGNATURE,
     ALLOW_FILE_ORGANIZATION_SEAL_IN_PRODUCTION,

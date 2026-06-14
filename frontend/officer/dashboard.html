@@ -6,6 +6,14 @@
     <title>Cán bộ - Cổng Dịch vụ công</title>
     <link rel="stylesheet" href="../css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Import map for client-side Falcon-512 via @noble/post-quantum (CDN) -->
+    <script type="importmap">
+    {
+        "imports": {
+            "@noble/post-quantum/falcon.js": "https://esm.sh/@noble/post-quantum@0.6.1/falcon.js"
+        }
+    }
+    </script>
 </head>
 <body>
     <div class="navbar">
@@ -22,6 +30,24 @@
     <main class="container">
         <h1 class="page-title">Quản lý hồ sơ</h1>
         <p class="page-subtitle">Tiếp nhận, xem chi tiết và ký số hồ sơ hành chính của công dân.</p>
+
+        <!-- Banner HSM mode (server manages keys) -->
+        <div id="hsmBanner" class="alert alert-info" style="display:none">
+            <strong>🔐 Chế độ HSM:</strong> Server quản lý khóa ký Falcon-512. Bạn chỉ cần đăng nhập (JWT) để ký số — không cần khóa thiết bị.
+            <span style="font-size:12px;opacity:0.7;margin-left:8px">(Identity binding: JWT + Audit trail)</span>
+        </div>
+
+        <!-- Banner cảnh báo khi chưa đăng ký device key -->
+        <div id="deviceKeyBanner" class="alert alert-error" style="display:none">
+            <strong>⚠️ Chưa có khóa ký thiết bị.</strong>
+            Bạn cần đăng ký khóa Falcon-512 trên thiết bị này trước khi ký số hồ sơ.
+            <button onclick="openKeyRegistration()" class="btn btn-sm btn-primary" style="margin-left:12px">Đăng ký ngay</button>
+        </div>
+
+        <!-- Banner thông báo đã có device key -->
+        <div id="deviceKeyOk" class="alert alert-success" style="display:none">
+            <span id="deviceKeyInfo">✅ Khóa ký thiết bị đã được đăng ký.</span>
+        </div>
 
         <div id="alertBox" class="alert" style="display:none"></div>
 
@@ -105,6 +131,33 @@
         </div>
     </main>
 
+    <!-- Modal đăng ký khóa ký thiết bị -->
+    <div id="keyRegModal" class="modal-overlay" style="display:none">
+        <div class="card" style="width:min(95vw,520px)">
+            <div class="card-header">
+                <h2>🔐 Đăng ký khóa ký thiết bị</h2>
+                <button onclick="closeKeyRegModal()" class="btn btn-sm btn-outline">Đóng</button>
+            </div>
+            <div style="padding:16px 24px;display:flex;flex-direction:column;gap:12px">
+                <p style="margin:0;font-size:14px;color:var(--gray-600)">
+                    Khóa Falcon-512 sẽ được tạo trên trình duyệt này. <strong>Khóa riêng tư không bao giờ gửi lên server</strong> —
+                    chỉ có khóa công khai được đăng ký. Khi ký hồ sơ, bạn sẽ ký bằng khóa trên thiết bị này.
+                </p>
+                <div id="keyRegStatus" style="font-size:14px;padding:8px;border-radius:6px;display:none"></div>
+                <div id="keyRegProgress" style="display:none">
+                    <div style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--gray-600)">
+                        <span class="spinner"></span> Đang tạo khóa Falcon-512...
+                    </div>
+                </div>
+            </div>
+            <div style="padding:16px 24px;border-top:1px solid var(--gray-200);display:flex;gap:12px;justify-content:flex-end">
+                <button onclick="closeKeyRegModal()" class="btn btn-outline">Hủy</button>
+                <button id="btnGenKey" onclick="generateAndRegisterKey()" class="btn btn-primary">Tạo khóa & Đăng ký</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal từ chối -->
     <div id="rejectModal" class="modal-overlay" style="display:none">
         <div class="card" style="width:min(95vw,480px)">
             <div class="card-header">
@@ -125,6 +178,7 @@
         </div>
     </div>
 
+    <!-- Modal chi tiết hồ sơ -->
     <div id="detailModal" class="modal-overlay" style="display:none">
         <div class="card" style="width:min(95vw,900px);max-height:90vh;display:flex;flex-direction:column">
             <div class="card-header" style="flex-shrink:0">
@@ -142,9 +196,36 @@
         </div>
     </div>
 
+    <!-- Load shared scripts (classic, define globals) -->
     <script src="../js/api.js"></script>
     <script src="../js/auth.js"></script>
+
+    <!-- ES module for client-side Falcon-512 crypto -->
+    <script type="module">
+        import {
+            generateKeyPair, storePrivateKey, loadPrivateKey,
+            hasDeviceKey, signPayload, registerPublicKey, signDocumentWithDeviceKey
+        } from "../js/crypto.js";
+
+        // Expose to inline scripts below
+        window.cryptoModule = {
+            generateKeyPair, storePrivateKey, loadPrivateKey,
+            hasDeviceKey, signPayload, registerPublicKey, signDocumentWithDeviceKey
+        };
+
+        // Signal that crypto module is ready
+        window.dispatchEvent(new Event("crypto-ready"));
+    </script>
+
     <script>
+        // ---------------------------------------------------------------------------
+        // Officer dashboard logic
+        // ---------------------------------------------------------------------------
+        const user = getUser();
+        const officerId = user?.id;
+        let deviceKeyRegistered = false;
+        let signingMode = "hsm"; // "hsm" or "device"
+
         if (!requireRole("officer", "admin")) { /* redirect */ } else {
             updateNav();
 
@@ -160,8 +241,140 @@
                 });
             });
 
+            // Check device key status after crypto module loads
+            window.addEventListener("crypto-ready", checkDeviceKeyStatus);
+            // Also check with server (in case key was registered on another device)
+            checkServerDeviceKey();
             loadPending();
         }
+
+        // ---------------------------------------------------------------------------
+        // Device key management
+        // ---------------------------------------------------------------------------
+
+        async function checkDeviceKeyStatus() {
+            const crypto = window.cryptoModule;
+            if (!crypto) return;
+            const localKeyExists = crypto.hasDeviceKey(officerId);
+            updateKeyBanner(localKeyExists ? "device-ok" : "device-unregistered");
+        }
+
+        async function checkServerDeviceKey() {
+            try {
+                const res = await apiGet("/app/documents/check-device-key");
+                signingMode = res?.mode || "hsm";
+
+                if (signingMode === "hsm") {
+                    // HSM mode: server manages keys, no device key needed
+                    deviceKeyRegistered = true;
+                    updateKeyBanner("hsm");
+                } else if (res?.registered) {
+                    // Device mode: check local key
+                    deviceKeyRegistered = true;
+                    const crypto = window.cryptoModule;
+                    const localKeyExists = crypto?.hasDeviceKey(officerId);
+                    updateKeyBanner(localKeyExists ? "device-ok" : "device-missing-local");
+                    if (localKeyExists) {
+                        document.getElementById("deviceKeyInfo").textContent =
+                            `✅ Khóa ký thiết bị đã đăng ký (Key ID: ${res.key_id})`;
+                    }
+                } else {
+                    deviceKeyRegistered = false;
+                    updateKeyBanner("device-unregistered");
+                }
+            } catch (_) {
+                // Server check failed, rely on local check
+                checkDeviceKeyStatus();
+            }
+        }
+
+        function updateKeyBanner(state) {
+            const hsmBanner = document.getElementById("hsmBanner");
+            const deviceBanner = document.getElementById("deviceKeyBanner");
+            const okBanner = document.getElementById("deviceKeyOk");
+
+            // Hide all first
+            hsmBanner.style.display = "none";
+            deviceBanner.style.display = "none";
+            okBanner.style.display = "none";
+
+            switch (state) {
+                case "hsm":
+                    hsmBanner.style.display = "flex";
+                    break;
+                case "device-ok":
+                    okBanner.style.display = "block";
+                    break;
+                case "device-missing-local":
+                case "device-unregistered":
+                    deviceBanner.style.display = "flex";
+                    break;
+            }
+        }
+
+        function openKeyRegistration() {
+            document.getElementById("keyRegStatus").style.display = "none";
+            document.getElementById("keyRegProgress").style.display = "none";
+            document.getElementById("btnGenKey").disabled = false;
+            document.getElementById("keyRegModal").style.display = "flex";
+        }
+
+        function closeKeyRegModal() {
+            document.getElementById("keyRegModal").style.display = "none";
+        }
+
+        async function generateAndRegisterKey() {
+            const crypto = window.cryptoModule;
+            if (!crypto) {
+                showAlert("Crypto module chưa sẵn sàng. Vui lòng đợi trang tải xong.", "error");
+                return;
+            }
+
+            const btn = document.getElementById("btnGenKey");
+            const progress = document.getElementById("keyRegProgress");
+            const status = document.getElementById("keyRegStatus");
+
+            btn.disabled = true;
+            progress.style.display = "block";
+            status.style.display = "none";
+
+            try {
+                // 1. Generate Falcon-512 keypair in browser
+                const { publicKey, privateKey } = await crypto.generateKeyPair();
+
+                // 2. Store private key in localStorage (never sent to server)
+                crypto.storePrivateKey(officerId, privateKey);
+
+                // 3. Register public key with server
+                const result = await crypto.registerPublicKey({
+                    ownerId: officerId,
+                    ownerName: user.full_name,
+                    publicKeyBytes: publicKey
+                });
+
+                status.style.display = "block";
+                status.style.background = "#dcfce7";
+                status.style.color = "#166534";
+                status.textContent = `✅ Đăng ký thành công! Key ID: ${result.key_id}`;
+                progress.style.display = "none";
+
+                deviceKeyRegistered = true;
+                updateKeyBanner(true);
+                document.getElementById("deviceKeyInfo").textContent =
+                    `✅ Khóa ký thiết bị đã đăng ký (Key ID: ${result.key_id})`;
+            } catch (err) {
+                status.style.display = "block";
+                status.style.background = "#fef2f2";
+                status.style.color = "#991b1b";
+                status.textContent = `❌ Lỗi: ${err.message}`;
+                progress.style.display = "none";
+                btn.disabled = false;
+            }
+        }
+
+        // ---------------------------------------------------------------------------
+        // Document list loading
+        // ---------------------------------------------------------------------------
 
         async function loadPending() {
             try {
@@ -211,6 +424,32 @@
                 showAlert(err.message, "error");
             }
         }
+
+        async function loadRejected() {
+            try {
+                const docs = await apiGet("/app/documents/rejected");
+                const tbody = document.getElementById("rejectedBody");
+                if (!docs || docs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>Không có hồ sơ nào đã từ chối</p></td></tr>';
+                    return;
+                }
+                tbody.innerHTML = docs.map(doc => `
+                    <tr>
+                        <td><strong>${sanitize(doc.document_id)}</strong></td>
+                        <td>${sanitize(doc.owner_name || doc.owner_id || "-")}</td>
+                        <td>${doc.rejected_at ? new Date(doc.rejected_at).toLocaleString("vi-VN") : "-"}</td>
+                        <td style="max-width:260px;word-break:break-word">${sanitize(doc.rejection_reason || "-")}</td>
+                        <td><button onclick="viewDoc('${sanitize(doc.document_id)}')" class="btn btn-sm btn-outline">Xem</button></td>
+                    </tr>
+                `).join("");
+            } catch (err) {
+                showAlert(err.message, "error");
+            }
+        }
+
+        // ---------------------------------------------------------------------------
+        // Document detail view
+        // ---------------------------------------------------------------------------
 
         async function viewDoc(docId) {
             try {
@@ -283,15 +522,50 @@
             }
         }
 
+        // ---------------------------------------------------------------------------
+        // Device-based document signing (challenge-response)
+        // ---------------------------------------------------------------------------
+
         async function signDoc(docId, closeModal = false) {
-            if (!confirm(`Xác nhận ký số hồ sơ ${docId}?`)) return;
             if (closeModal) closeDetail();
-            try {
-                const res = await apiPost(`/app/documents/${docId}/sign`, {});
-                showAlert(`Ký số thành công! Hồ sơ ${res.documentInfo.document_id}`, "success");
-                loadPending();
-            } catch (err) {
-                showAlert(err.message, "error");
+
+            if (signingMode === "device") {
+                // DEVICE MODE: Challenge-response signing with device key
+                const crypto = window.cryptoModule;
+                if (!crypto) {
+                    showAlert("Crypto module chưa sẵn sàng. Vui lòng đợi trang tải xong.", "error");
+                    return;
+                }
+                if (!crypto.hasDeviceKey(officerId)) {
+                    showAlert("Bạn cần đăng ký khóa ký thiết bị trước khi ký số. Nhấn 'Đăng ký ngay' ở banner phía trên.", "error");
+                    openKeyRegistration();
+                    return;
+                }
+                if (!confirm(`Xác nhận ký số hồ sơ ${docId}?\n\nChữ ký sẽ được tạo bằng khóa Falcon-512 trên thiết bị này.`)) return;
+
+                try {
+                    showAlert("Đang tạo thách thức ký...", "info");
+                    const res = await crypto.signDocumentWithDeviceKey(docId, {
+                        id: officerId,
+                        full_name: user.full_name
+                    });
+                    showAlert(`Ký số thành công! Hồ sơ ${res.documentInfo.document_id}`, "success");
+                    loadPending();
+                } catch (err) {
+                    showAlert(`Ký số thất bại: ${err.message}`, "error");
+                }
+            } else {
+                // HSM MODE: Server (HSM) ký thay officer, identity từ JWT
+                if (!confirm(`Xác nhận ký số hồ sơ ${docId}?\n\nChữ ký sẽ được tạo bởi HSM server với danh tính: ${user.full_name}`)) return;
+
+                try {
+                    showAlert("Đang ký số qua HSM...", "info");
+                    const res = await apiPost(`/app/documents/${docId}/sign`, {});
+                    showAlert(`Ký số thành công! Hồ sơ ${res.documentInfo.document_id}`, "success");
+                    loadPending();
+                } catch (err) {
+                    showAlert(`Ký số thất bại: ${err.message}`, "error");
+                }
             }
         }
 
@@ -303,29 +577,9 @@
             document.getElementById("detailModal").style.display = "none";
         }
 
-        // downloadDocument and showAlert are now in ../js/api.js (shared)
-
-        async function loadRejected() {
-            try {
-                const docs = await apiGet("/app/documents/rejected");
-                const tbody = document.getElementById("rejectedBody");
-                if (!docs || docs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>Không có hồ sơ nào đã từ chối</p></td></tr>';
-                    return;
-                }
-                tbody.innerHTML = docs.map(doc => `
-                    <tr>
-                        <td><strong>${sanitize(doc.document_id)}</strong></td>
-                        <td>${sanitize(doc.owner_name || doc.owner_id || "-")}</td>
-                        <td>${doc.rejected_at ? new Date(doc.rejected_at).toLocaleString("vi-VN") : "-"}</td>
-                        <td style="max-width:260px;word-break:break-word">${sanitize(doc.rejection_reason || "-")}</td>
-                        <td><button onclick="viewDoc('${sanitize(doc.document_id)}')" class="btn btn-sm btn-outline">Xem</button></td>
-                    </tr>
-                `).join("");
-            } catch (err) {
-                showAlert(err.message, "error");
-            }
-        }
+        // ---------------------------------------------------------------------------
+        // Reject modal
+        // ---------------------------------------------------------------------------
 
         let pendingRejectDocId = null;
 
@@ -358,7 +612,18 @@
             }
         }
 
-        // showAlert is now in ../js/api.js (shared)
+        // showAlert and downloadDocument are in ../js/api.js (shared)
+
+        // Spinner + alert-info CSS
+        (function() {
+            const style = document.createElement("style");
+            style.textContent = `
+                .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--gray-300);border-top-color:var(--primary);border-radius:50%;animation:spin .6s linear infinite}
+                @keyframes spin{to{transform:rotate(360deg)}}
+                .alert-info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+            `;
+            document.head.appendChild(style);
+        })();
     </script>
 </body>
 </html>

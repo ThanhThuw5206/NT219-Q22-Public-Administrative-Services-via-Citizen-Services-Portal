@@ -32,6 +32,7 @@ import { saveMembersForDocument } from "../repositories/household_members.reposi
 import { validateFilePath } from "../utils/path-validator.util.js";
 import { STORAGE_ROOT } from "../utils/storage.util.js";
 import { IS_DEV } from "../config/env.config.js";
+import { registerExternalPublicKeyForOwner } from "../crypto/key-manager.service.js";
 
 /**
  * Safe error responses for document endpoints.
@@ -583,6 +584,82 @@ export const issueDocument = async (req, res) => {
             message: "Document issued successfully",
             documentInfo: result
         });
+    } catch (error) {
+        safeError(res, error);
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Đăng ký khóa ký thiết bị (Officer device key registration)
+// ---------------------------------------------------------------------------
+
+/** Officer đăng ký public key từ thiết bị cá nhân (private key không bao giờ gửi lên server) */
+export const registerDeviceKeyHandler = async (req, res) => {
+    try {
+        const { owner_id, owner_name, public_key, algorithm, provider } = req.body;
+
+        if (!owner_id || !public_key) {
+            return res.status(400).json({ message: "owner_id and public_key are required" });
+        }
+
+        // Chỉ cho phép officer/admin đăng ký khóa
+        if (!canManageAllDocuments(req.user)) {
+            return res.status(403).json({ message: "Only officers can register device keys" });
+        }
+
+        // owner_id phải khớp với user đang đăng nhập (không cho đăng ký hộ người khác)
+        const key = await registerExternalPublicKeyForOwner({
+            ownerType: "user",
+            ownerId: String(req.user.id),
+            ownerName: owner_name || req.user.full_name,
+            publicKey: public_key,
+            algorithm: algorithm || "FALCON-512",
+            provider: provider || "officer-device"
+        });
+
+        res.status(201).json({
+            message: "Device key registered successfully",
+            key_id: key.key_id,
+            algorithm: key.algorithm,
+            public_key: key.public_key
+        });
+    } catch (error) {
+        safeError(res, error, 400);
+    }
+};
+
+/** Kiểm tra officer đã đăng ký device key chưa + signing mode hiện tại */
+export const checkDeviceKeyHandler = async (req, res) => {
+    try {
+        const { SIGNING_MODE } = await import("../config/env.config.js");
+        const { getActivePublicKeyForOwner } = await import("../crypto/key-manager.service.js");
+
+        // HSM mode: server quản lý key, không cần officer đăng ký device key
+        if (SIGNING_MODE === "hsm") {
+            return res.json({
+                mode: "hsm",
+                registered: true,
+                message: "Server HSM manages signing keys. No device key needed."
+            });
+        }
+
+        // Device mode: kiểm tra officer đã có device key chưa
+        try {
+            const key = await getActivePublicKeyForOwner({
+                ownerType: "user",
+                ownerId: String(req.user.id)
+            });
+            res.json({
+                mode: "device",
+                registered: true,
+                key_id: key.key_id,
+                algorithm: key.algorithm,
+                provider: key.provider,
+                created_at: key.created_at
+            });
+        } catch {
+            res.json({ mode: "device", registered: false });
+        }
     } catch (error) {
         safeError(res, error);
     }

@@ -10,7 +10,7 @@ import { createSignature, getLatestSignatureByDocumentId, listSignaturesByDocume
 import { createChallenge, findChallengeById, markChallengeUsed } from "./signing-challenge.repository.js";
 import { buildSignaturePayload, getActiveKey, signPayload, signPayloadWithKey, verifyPayloadSignature } from "../crypto/signature.service.js";
 import { getActivePublicKeyForOwner, getOrCreateActivePublicKeyForOwner, getPublicKeyById } from "../crypto/key-manager.service.js";
-import { ALLOW_SERVER_SIDE_PERSONAL_KEYS, REQUIRE_OFFICER_DEVICE_SIGNATURE } from "../config/env.config.js";
+import { ALLOW_SERVER_SIDE_PERSONAL_KEYS, REQUIRE_OFFICER_DEVICE_SIGNATURE, SIGNING_MODE } from "../config/env.config.js";
 import { writeAuditLog } from "./audit.service.js";
 import { getUserById } from "./auth.service.js";
 import path from "path";
@@ -808,6 +808,31 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
         throw new Error("Officer approval does not match current original PDF hash");
     }
     if (!officerApproval) {
+        if (SIGNING_MODE === "device") {
+            // DEVICE MODE: Bắt buộc phải có officer signature proof từ thiết bị
+            let officerHasKey = false;
+            try {
+                await getOfficerPersonalKey(signer);
+                officerHasKey = true;
+            } catch {
+                officerHasKey = false;
+            }
+
+            if (officerHasKey) {
+                throw new Error(
+                    "Officer device signature proof is required. " +
+                    "Please sign the challenge on your device and provide the proof."
+                );
+            } else {
+                throw new Error(
+                    "Officer has not registered a device key. " +
+                    "Please register your Falcon-512 device key before signing documents."
+                );
+            }
+        }
+
+        // HSM MODE: Server (HSM) ký thay officer sau khi xác thực JWT
+        // Officer identity được đảm bảo bởi JWT authentication + audit log
         const officerKey = await getOfficerPersonalKey(signer);
         const approvalPayload = buildSignaturePayload({
             action: "approve_document",
@@ -826,7 +851,10 @@ export const signDocument = async ({ documentId, officerId = "officer", ipAddres
             officerSignatureInfo = await signPayloadWithKey(approvalPayload, officerKey.key_id);
         } catch (error) {
             if (error?.code === "PUBLIC_ONLY_KEY") {
-                throw new Error("Officer device signature proof is required for public-only personal keys");
+                throw new Error(
+                    "Officer has a public-only key (device mode). " +
+                    "Please provide a device signature proof, or switch to HSM mode."
+                );
             }
             throw error;
         }

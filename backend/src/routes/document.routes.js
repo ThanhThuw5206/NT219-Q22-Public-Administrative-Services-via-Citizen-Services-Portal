@@ -18,7 +18,9 @@ import {
     submitDocumentHandler,
     signDocumentHandler,
     createSigningChallengeHandler,
-    rejectDocumentHandler
+    rejectDocumentHandler,
+    registerDeviceKeyHandler,
+    checkDeviceKeyHandler
 } from "../controllers/document.controller.js";
 
 import { authenticate, optionalAuthenticate } from "../middlewares/auth.middleware.js";
@@ -43,6 +45,8 @@ router.get("/pending", authenticate, requireRole("officer", "admin"), listPendin
 router.get("/issued", authenticate, requireRole("officer", "admin"), listIssuedDocuments);
 router.get("/rejected", authenticate, requireRole("officer", "admin"), listRejectedDocuments);
 router.post("/upload", authenticate, requireRole("officer", "admin"), uploadDocument);
+router.post("/register-device-key", authenticate, requireRole("officer", "admin"), registerDeviceKeyHandler);
+router.get("/check-device-key", authenticate, requireRole("officer", "admin"), checkDeviceKeyHandler);
 router.post("/:documentId/sign-challenge", authenticate, requireRole("officer", "admin"), createSigningChallengeHandler);
 router.post("/:documentId/sign", authenticate, requireRole("officer", "admin"), signDocumentHandler);
 router.post("/:documentId/reject", authenticate, requireRole("officer", "admin"), rejectDocumentHandler);
