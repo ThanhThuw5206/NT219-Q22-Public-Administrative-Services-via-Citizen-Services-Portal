@@ -348,7 +348,8 @@
                         : doc.status === "submitted" ? "Chờ duyệt"
                         : doc.status === "rejected" ? "Từ chối"
                         : doc.status;
-                    const verifyToken = doc.verify_url ? new URL(doc.verify_url).searchParams.get("token") : null;
+                    let verifyToken = null;
+                    try { verifyToken = doc.verify_url ? new URL(doc.verify_url).searchParams.get("token") : null; } catch (_) {}
                     const verifyLink = verifyToken ? `../verify.html?id=${encodeURIComponent(doc.document_id)}&token=${encodeURIComponent(verifyToken)}` : "#";
                     const rejectionNote = doc.status === "rejected" && doc.rejection_reason
                         ? `<div style="font-size:12px;color:#b91c1c;margin-top:4px">Lý do: ${sanitize(doc.rejection_reason)}</div>`

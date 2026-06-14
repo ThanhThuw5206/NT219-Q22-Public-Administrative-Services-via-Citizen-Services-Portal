@@ -1,12 +1,3 @@
-/**
- * Crypto Zone Controller — sign, verify, and public-key endpoints.
- *
- * All routes served by this controller live behind `requireCryptoZoneAccess`
- * (applied at the router mount in `server.js`), so authentication is already
- * enforced before any handler executes.
- *
- * Related: Requirements 9.4, 9.10, 12.11, 12.12, 12.13.
- */
 
 import {
     buildSignaturePayload,

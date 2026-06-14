@@ -14,7 +14,11 @@ function getUser() {
 
 /** Lưu token và thông tin người dùng vào localStorage sau khi đăng nhập */
 function setAuth(token, user) {
-    localStorage.setItem("token", token);
+    if (token) {
+        localStorage.setItem("token", token);
+    } else {
+        localStorage.removeItem("token");
+    }
     localStorage.setItem("user", JSON.stringify(user));
 }
 
@@ -30,9 +34,9 @@ function logout() {
     window.location.href = "/login.html";
 }
 
-/** Kiểm tra người dùng đã đăng nhập chưa */
+/** Kiểm tra người dùng đã đăng nhập chưa (dựa trên user object, token ở httpOnly cookie) */
 function isLoggedIn() {
-    return !!getToken();
+    return !!getUser();
 }
 
 /** Lấy vai trò đầu tiên của người dùng (citizen, officer, admin) */
@@ -69,11 +73,11 @@ async function apiFetch(path, options = {}) {
     });
 
     if (res.status === 401) {
-        if (getToken()) {
+        if (getUser()) {
             logout();
             return null;
         }
-        // No token → on login/register page, let error surface normally
+        // No user → on login/register page, let error surface normally
     }
 
     return res;

@@ -254,8 +254,8 @@
                 const actions = document.getElementById("detailActions");
                 let actionBtns = `<button onclick="closeDetail()" class="btn btn-sm btn-outline">Đóng</button>`;
                 if (doc.status === "submitted") {
-                    actionBtns += `<button onclick="signDocFromModal('${doc.document_id}')" class="btn btn-sm btn-success">Ký số</button>`;
-                    actionBtns += `<button onclick="closeDetail();openRejectModal('${doc.document_id}')" class="btn btn-sm" style="background:#b91c1c;color:#fff;border:none;cursor:pointer">Từ chối</button>`;
+                    actionBtns += `<button onclick="signDocFromModal('${sanitize(doc.document_id)}')" class="btn btn-sm btn-success">Ký số</button>`;
+                    actionBtns += `<button onclick="closeDetail();openRejectModal('${sanitize(doc.document_id)}')" class="btn btn-sm" style="background:#b91c1c;color:#fff;border:none;cursor:pointer">Từ chối</button>`;
                 }
                 if (doc.status === "issued" && doc.verify_url) {
                     try {
