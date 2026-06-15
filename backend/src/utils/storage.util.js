@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-const STORAGE_ROOT = path.resolve(
+export const STORAGE_ROOT = path.resolve(
     "storage/documents"
 );
 
