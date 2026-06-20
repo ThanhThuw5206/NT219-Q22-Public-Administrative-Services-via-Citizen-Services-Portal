@@ -1,0 +1,20 @@
+{
+  "document_id": "HS-2026-20ED77CD",
+  "owner_id": 4,
+  "original_name": "CT01.pdf",
+  "file_path": "C:\\Users\\hphun\\NT219\\DoAn\\Public-Administrative-Services-via-Citizen-Services-Portal\\backend\\storage\\documents\\HS-2026-20ED77CD\\original.pdf",
+  "original_file_hash": "19124890709049c2462151323f8c873c324e42e282a293867c08f5c415f6c1fe",
+  "status": "submitted",
+  "created_at": "2026-06-15T14:58:09.833Z",
+  "signature": "",
+  "file_hash": "19124890709049c2462151323f8c873c324e42e282a293867c08f5c415f6c1fe",
+  "token_hash": "f25ec8d1c8ef3fc9d9cc6da068e2f84eeefe86c5536a51d4f9463407b4316f27",
+  "public_key_id": 0,
+  "signed_at": null,
+  "signature_payload": null,
+  "signed_pdf_path": null,
+  "verify_url": null,
+  "qr_payload": null,
+  "algorithm": null,
+  "signature_provider": null
+}

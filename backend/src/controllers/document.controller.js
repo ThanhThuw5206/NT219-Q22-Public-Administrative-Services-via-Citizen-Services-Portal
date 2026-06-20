@@ -29,6 +29,7 @@ import {
 } from "../validators/ct01.validator.js";
 import { saveMembersForDocument } from "../repositories/household_members.repository.js";
 import { validateFilePath } from "../utils/path-validator.util.js";
+import { STORAGE_ROOT } from "../utils/storage.util.js";
 import { IS_DEV } from "../config/env.config.js";
 
 /**
@@ -326,7 +327,7 @@ export const downloadDocumentFile = async (req, res) => {
         // Validate path to prevent traversal
         let safePath;
         try {
-            safePath = validateFilePath(fileInfo.filePath, uploadDirectory);
+            safePath = validateFilePath(fileInfo.filePath, STORAGE_ROOT);
         } catch {
             return res.status(403).json({ message: "Invalid file path" });
         }
@@ -375,7 +376,7 @@ export const downloadSignedDocument = async (req, res) => {
         // Validate path to prevent traversal
         let safePath;
         try {
-            safePath = validateFilePath(signedFile.filePath, uploadDirectory);
+            safePath = validateFilePath(signedFile.filePath, STORAGE_ROOT);
         } catch {
             return res.status(403).json({ message: "Invalid file path" });
         }
@@ -422,7 +423,7 @@ export const downloadPreviewDocument = async (req, res) => {
         // Validate path to prevent traversal attacks
         let safePath;
         try {
-            safePath = validateFilePath(preview.preview_path, uploadDirectory);
+            safePath = validateFilePath(preview.preview_path, STORAGE_ROOT);
         } catch {
             return res.status(403).json({ message: "Invalid file path" });
         }
